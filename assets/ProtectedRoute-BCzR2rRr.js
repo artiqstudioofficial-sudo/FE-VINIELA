@@ -1,0 +1,1 @@
+import{c as a,j as t,N as r}from"./index-_EZrd0Hu.js";const i=({children:e})=>{const o=sessionStorage.getItem("viniela-auth")==="true",s=a();return o?t.jsx(t.Fragment,{children:e}):t.jsx(r,{to:"/login",state:{from:s},replace:!0})};export{i as default};

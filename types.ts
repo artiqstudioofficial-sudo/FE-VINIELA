@@ -1,0 +1,135 @@
+// FIX: Import React types to resolve 'Cannot find namespace React' error.
+import type * as React from 'react';
+
+export type Language = 'id' | 'en' | 'cn';
+export type NewsCategory = 'company' | 'division' | 'industry' | 'press';
+export type JobType = 'Full-time' | 'Part-time' | 'Contract' | 'Internship';
+
+export interface NewsArticle {
+  id: string;
+  title: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  content: {
+    id:string;
+    en: string;
+    cn: string;
+  };
+  date: string;
+  imageUrls: string[];
+  category: NewsCategory;
+}
+
+export interface Division {
+    name: string;
+    slug: string;
+    Icon: React.FC<{ className?: string }>;
+    description: string;
+    url: string;
+}
+
+export interface JobListing {
+  id: string;
+  title: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  location: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  type: JobType;
+  description: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  responsibilities: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  qualifications: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  date: string;
+}
+
+export interface JobApplication {
+    id: string;
+    jobId: string;
+    jobTitle: string; // Store job title for easier display
+    name: string;
+    email: string;
+    phone: string;
+    resume: string; // Base64 data URL
+    resumeFileName: string;
+    coverLetter?: string;
+    date: string;
+}
+
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  date: string;
+}
+
+export interface Comment {
+  id: string;
+  articleId: string;
+  author: string;
+  email: string;
+  text: string;
+  date: string;
+  avatar: string;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  title: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  bio: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  imageUrl: string;
+  linkedinUrl?: string;
+}
+
+export interface Partner {
+  id: string;
+  name: string;
+  logoUrl: string;
+}
+
+// FIX: Add Project type definition to resolve import error in projectService.ts.
+export interface Project {
+  id: string;
+  divisionSlug: string;
+  title: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  description: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  imageUrl: string;
+  date: string;
+}
