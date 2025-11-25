@@ -1,9 +1,9 @@
 // FIX: Import React types to resolve 'Cannot find namespace React' error.
-import type * as React from 'react';
+import type * as React from "react";
 
-export type Language = 'id' | 'en' | 'cn';
-export type NewsCategory = 'company' | 'division' | 'industry' | 'press';
-export type JobType = 'Full-time' | 'Part-time' | 'Contract' | 'Internship';
+export type Language = "id" | "en" | "cn";
+export type NewsCategory = "company" | "division" | "industry" | "press";
+export type JobType = "Full-time" | "Part-time" | "Contract" | "Internship";
 
 export interface NewsArticle {
   id: string;
@@ -13,7 +13,7 @@ export interface NewsArticle {
     cn: string;
   };
   content: {
-    id:string;
+    id: string;
     en: string;
     cn: string;
   };
@@ -23,11 +23,11 @@ export interface NewsArticle {
 }
 
 export interface Division {
-    name: string;
-    slug: string;
-    Icon: React.FC<{ className?: string }>;
-    description: string;
-    url: string;
+  name: string;
+  slug: string;
+  Icon: React.FC<{ className?: string }>;
+  description: string;
+  url: string;
 }
 
 export interface JobListing {
@@ -62,16 +62,16 @@ export interface JobListing {
 }
 
 export interface JobApplication {
-    id: string;
-    jobId: string;
-    jobTitle: string; // Store job title for easier display
-    name: string;
-    email: string;
-    phone: string;
-    resume: string; // Base64 data URL
-    resumeFileName: string;
-    coverLetter?: string;
-    date: string;
+  id: string;
+  jobId: string;
+  jobTitle: string; // Store job title for easier display
+  name: string;
+  email: string;
+  phone: string;
+  resume: string; // Base64 data URL
+  resumeFileName: string;
+  coverLetter?: string;
+  date: string;
 }
 
 export interface ContactMessage {
