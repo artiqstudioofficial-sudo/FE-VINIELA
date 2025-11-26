@@ -1,8 +1,10 @@
 // src/services/newsService.ts
-import { NewsArticle, NewsCategory } from '../types';
+import { NewsArticle, NewsCategory } from "../types";
 
 const API_BASE =
-  (import.meta as any).env?.VITE_API_BASE || process.env.VITE_API_BASE || 'http://localhost:4000';
+  (import.meta as any).env?.VITE_API_BASE ||
+  process.env.VITE_API_BASE ||
+  "http://localhost:4000";
 
 export type NewsFormPayload = {
   title: { id: string; en: string; cn: string };
@@ -38,14 +40,14 @@ async function handleJson<T>(res: Response): Promise<T> {
 // GET /api/news?page=&limit=
 export async function listNews(
   page: number = 1,
-  limit: number = 50,
+  limit: number = 50
 ): Promise<PaginatedNewsResponse> {
-  const url = new URL('/api/news', API_BASE);
-  url.searchParams.set('page', String(page));
-  url.searchParams.set('limit', String(limit));
+  const url = new URL("/api/news", API_BASE);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("limit", String(limit));
   const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
+    method: "GET",
+    headers: { Accept: "application/json" },
   });
   return handleJson<PaginatedNewsResponse>(res);
 }
@@ -53,21 +55,23 @@ export async function listNews(
 // GET /api/news/:id
 export async function getNewsById(id: string): Promise<NewsArticle> {
   const res = await fetch(`${API_BASE}/api/news/${id}`, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
+    method: "GET",
+    headers: { Accept: "application/json" },
   });
   const body = await handleJson<{ data: NewsArticle }>(res);
   return body.data;
 }
 
 // POST /api/news
-export async function createNews(payload: NewsFormPayload): Promise<NewsArticle> {
-  alert('test');
+export async function createNews(
+  payload: NewsFormPayload
+): Promise<NewsArticle> {
+  alert("test");
   const res = await fetch(`${API_BASE}/api/news`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
     },
     body: JSON.stringify(payload),
   });
@@ -76,12 +80,15 @@ export async function createNews(payload: NewsFormPayload): Promise<NewsArticle>
 }
 
 // PUT /api/news/:id
-export async function updateNews(id: string, payload: NewsFormPayload): Promise<NewsArticle> {
+export async function updateNews(
+  id: string,
+  payload: NewsFormPayload
+): Promise<NewsArticle> {
   const res = await fetch(`${API_BASE}/api/news/${id}`, {
-    method: 'PUT',
+    method: "PUT",
     headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
     },
     body: JSON.stringify(payload),
   });
@@ -92,8 +99,8 @@ export async function updateNews(id: string, payload: NewsFormPayload): Promise<
 // DELETE /api/news/:id
 export async function deleteNews(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/news/${id}`, {
-    method: 'DELETE',
-    headers: { Accept: 'application/json' },
+    method: "DELETE",
+    headers: { Accept: "application/json" },
   });
   await handleJson(res); // akan throw kalau gagal
 }

@@ -1,58 +1,36 @@
-// index.ts (atau server.ts)
-import cors from 'cors';
-import crypto from 'crypto';
-import express, { Request, Response } from 'express';
-import { query } from './lib/db';
+import cors from "cors";
+import crypto from "crypto";
+import express, { Request, Response } from "express";
+import { query } from "./lib/db";
+import { NewsArticleDto, NewsCategory, NewsRow } from "./types";
 
 const app = express();
 const PORT = 4000;
 
 app.use(cors());
-app.use(express.json());
+app.use(
+  express.json({
+    limit: "20mb", // boleh dinaikkan lagi kalau masih kurang, misal '20mb'
+  })
+);
 
-/* -------------------------------------------------------------------------- */
-/*                                   TYPES                                    */
-/* -------------------------------------------------------------------------- */
-
-type NewsCategory = 'company' | 'division' | 'industry' | 'press';
-
-interface NewsRow {
-  id: string;
-  title_id: string;
-  title_en: string | null;
-  title_cn: string | null;
-  content_id: string;
-  content_en: string | null;
-  content_cn: string | null;
-  category: NewsCategory;
-  image_urls: string | null; // JSON string di DB
-  published_at: Date | string | null;
-  created_at?: Date | string;
-  updated_at?: Date | string;
-}
-
-interface NewsArticleDto {
-  id: string;
-  date: string | null; // ISO string
-  category: NewsCategory;
-  title: {
-    id: string;
-    en: string;
-    cn: string;
-  };
-  content: {
-    id: string;
-    en: string;
-    cn: string;
-  };
-  imageUrls: string[];
-}
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "20mb",
+  })
+);
 
 /* -------------------------------------------------------------------------- */
 /*                                   HELPERS                                  */
 /* -------------------------------------------------------------------------- */
 
-const ALLOWED_CATEGORIES: NewsCategory[] = ['company', 'division', 'industry', 'press'];
+const ALLOWED_CATEGORIES: NewsCategory[] = [
+  "company",
+  "division",
+  "industry",
+  "press",
+];
 
 function mapNewsRow(row: NewsRow): NewsArticleDto {
   let imageUrls: string[] = [];
@@ -61,7 +39,7 @@ function mapNewsRow(row: NewsRow): NewsArticleDto {
     try {
       const parsed = JSON.parse(row.image_urls);
       if (Array.isArray(parsed)) {
-        imageUrls = parsed.filter((x) => typeof x === 'string');
+        imageUrls = parsed.filter((x) => typeof x === "string");
       }
     } catch {
       // kalau gagal parse, biarin kosong
@@ -76,13 +54,13 @@ function mapNewsRow(row: NewsRow): NewsArticleDto {
     category: row.category,
     title: {
       id: row.title_id,
-      en: row.title_en ?? '',
-      cn: row.title_cn ?? '',
+      en: row.title_en ?? "",
+      cn: row.title_cn ?? "",
     },
     content: {
       id: row.content_id,
-      en: row.content_en ?? '',
-      cn: row.content_cn ?? '',
+      en: row.content_en ?? "",
+      cn: row.content_cn ?? "",
     },
     imageUrls,
   };
@@ -102,11 +80,11 @@ function generateId(): string {
  * Query:
  *   ?page=1&limit=10
  */
-app.get('/api/news', async (req: Request, res: Response) => {
+app.get("/api/news", async (req: Request, res: Response) => {
   try {
     // --- pagination params ---
-    const rawPage = req.query.page?.toString() ?? '1';
-    const rawLimit = req.query.limit?.toString() ?? '10';
+    const rawPage = req.query.page?.toString() ?? "1";
+    const rawLimit = req.query.limit?.toString() ?? "10";
 
     let page = parseInt(rawPage, 10);
     let limit = parseInt(rawLimit, 10);
@@ -122,7 +100,9 @@ app.get('/api/news', async (req: Request, res: Response) => {
       total: number;
     }
 
-    const countRows = await query<CountRow>('SELECT COUNT(*) AS total FROM news');
+    const countRows = await query<CountRow>(
+      "SELECT COUNT(*) AS total FROM news"
+    );
     const countRow = countRows[0];
     const total = countRow ? Number(countRow.total) : 0;
     const totalPages = total > 0 ? Math.ceil(total / limit) : 1;
@@ -147,7 +127,7 @@ app.get('/api/news', async (req: Request, res: Response) => {
       ORDER BY COALESCE(published_at, created_at) DESC
       LIMIT ? OFFSET ?
       `,
-      [limit, offset],
+      [limit, offset]
     );
 
     const data = rows.map(mapNewsRow);
@@ -163,7 +143,7 @@ app.get('/api/news', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || 'DB error' });
+    res.status(500).json({ error: err.message || "DB error" });
   }
 });
 
@@ -171,7 +151,7 @@ app.get('/api/news', async (req: Request, res: Response) => {
  * GET /api/news/:id
  * Ambil detail 1 news
  */
-app.get('/api/news/:id', async (req: Request, res: Response) => {
+app.get("/api/news/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const rows = await query<NewsRow>(
@@ -193,18 +173,18 @@ app.get('/api/news/:id', async (req: Request, res: Response) => {
       WHERE id = ?
       LIMIT 1
       `,
-      [id],
+      [id]
     );
 
     const row = rows[0];
     if (!row) {
-      return res.status(404).json({ error: 'News not found' });
+      return res.status(404).json({ error: "News not found" });
     }
 
     res.json({ data: mapNewsRow(row) });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || 'DB error' });
+    res.status(500).json({ error: err.message || "DB error" });
   }
 });
 
@@ -212,22 +192,24 @@ app.get('/api/news/:id', async (req: Request, res: Response) => {
  * POST /api/news
  * Create berita baru
  */
-app.post('/api/news', async (req: Request, res: Response) => {
+app.post("/api/news", async (req: Request, res: Response) => {
   try {
     const { title, content, category, imageUrls, date } = req.body || {};
 
     if (!title?.id || !content?.id || !category) {
-      return res.status(400).json({ error: 'title.id, content.id, dan category wajib diisi' });
+      return res
+        .status(400)
+        .json({ error: "title.id, content.id, dan category wajib diisi" });
     }
 
     if (!ALLOWED_CATEGORIES.includes(category)) {
-      return res.status(400).json({ error: 'Invalid category' });
+      return res.status(400).json({ error: "Invalid category" });
     }
 
     const id = generateId();
     const publishedAt = date ? new Date(date) : new Date();
     const images = Array.isArray(imageUrls)
-      ? imageUrls.filter((x: any) => typeof x === 'string')
+      ? imageUrls.filter((x: any) => typeof x === "string")
       : [];
 
     await query(
@@ -245,15 +227,15 @@ app.post('/api/news', async (req: Request, res: Response) => {
       [
         id,
         title.id,
-        title.en ?? '',
-        title.cn ?? '',
+        title.en ?? "",
+        title.cn ?? "",
         content.id,
-        content.en ?? '',
-        content.cn ?? '',
+        content.en ?? "",
+        content.cn ?? "",
         category,
         JSON.stringify(images),
         publishedAt,
-      ],
+      ]
     );
 
     const dto: NewsArticleDto = {
@@ -262,13 +244,13 @@ app.post('/api/news', async (req: Request, res: Response) => {
       category,
       title: {
         id: title.id,
-        en: title.en ?? '',
-        cn: title.cn ?? '',
+        en: title.en ?? "",
+        cn: title.cn ?? "",
       },
       content: {
         id: content.id,
-        en: content.en ?? '',
-        cn: content.cn ?? '',
+        en: content.en ?? "",
+        cn: content.cn ?? "",
       },
       imageUrls: images,
     };
@@ -276,7 +258,7 @@ app.post('/api/news', async (req: Request, res: Response) => {
     res.status(201).json({ data: dto });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || 'DB error' });
+    res.status(500).json({ error: err.message || "DB error" });
   }
 });
 
@@ -284,31 +266,33 @@ app.post('/api/news', async (req: Request, res: Response) => {
  * PUT /api/news/:id
  * Update berita
  */
-app.put('/api/news/:id', async (req: Request, res: Response) => {
+app.put("/api/news/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { title, content, category, imageUrls, date } = req.body || {};
 
     if (!title?.id || !content?.id || !category) {
-      return res.status(400).json({ error: 'title.id, content.id, dan category wajib diisi' });
+      return res
+        .status(400)
+        .json({ error: "title.id, content.id, dan category wajib diisi" });
     }
 
     if (!ALLOWED_CATEGORIES.includes(category)) {
-      return res.status(400).json({ error: 'Invalid category' });
+      return res.status(400).json({ error: "Invalid category" });
     }
 
     const publishedAt = date ? new Date(date) : null;
     const images = Array.isArray(imageUrls)
-      ? imageUrls.filter((x: any) => typeof x === 'string')
+      ? imageUrls.filter((x: any) => typeof x === "string")
       : [];
 
     const params: any[] = [
       title.id,
-      title.en ?? '',
-      title.cn ?? '',
+      title.en ?? "",
+      title.cn ?? "",
       content.id,
-      content.en ?? '',
-      content.cn ?? '',
+      content.en ?? "",
+      content.cn ?? "",
       category,
       JSON.stringify(images),
     ];
@@ -355,18 +339,18 @@ app.put('/api/news/:id', async (req: Request, res: Response) => {
       WHERE id = ?
       LIMIT 1
       `,
-      [id],
+      [id]
     );
 
     const row = rows[0];
     if (!row) {
-      return res.status(404).json({ error: 'News not found' });
+      return res.status(404).json({ error: "News not found" });
     }
 
     res.json({ data: mapNewsRow(row) });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || 'DB error' });
+    res.status(500).json({ error: err.message || "DB error" });
   }
 });
 
@@ -374,23 +358,26 @@ app.put('/api/news/:id', async (req: Request, res: Response) => {
  * DELETE /api/news/:id
  * Hapus berita
  */
-app.delete('/api/news/:id', async (req: Request, res: Response) => {
+app.delete("/api/news/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    await query<any>('DELETE FROM news WHERE id = ?', [id]);
+    await query<any>("DELETE FROM news WHERE id = ?", [id]);
 
     // cek lagi apakah masih ada
-    const rows = await query<NewsRow>('SELECT id FROM news WHERE id = ? LIMIT 1', [id]);
+    const rows = await query<NewsRow>(
+      "SELECT id FROM news WHERE id = ? LIMIT 1",
+      [id]
+    );
     const row = rows[0];
     if (row) {
-      return res.status(500).json({ error: 'Failed to delete news' });
+      return res.status(500).json({ error: "Failed to delete news" });
     }
 
     res.json({ ok: true });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || 'DB error' });
+    res.status(500).json({ error: err.message || "DB error" });
   }
 });
 
@@ -398,9 +385,9 @@ app.delete('/api/news/:id', async (req: Request, res: Response) => {
  * GET /api/db-test
  * Cek koneksi DB
  */
-app.get('/api/db-test', async (_: Request, res: Response) => {
+app.get("/api/db-test", async (_: Request, res: Response) => {
   try {
-    const tables = await query<any>('SHOW TABLES');
+    const tables = await query<any>("SHOW TABLES");
     res.json({ ok: true, tables });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
