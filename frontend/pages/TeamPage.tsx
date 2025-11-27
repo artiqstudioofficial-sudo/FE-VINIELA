@@ -11,12 +11,28 @@ const LinkedInIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 );
 
 const TeamPage: React.FC = () => {
-  const { t, language } = useTranslations();
+  const { t } = useTranslations();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    setTeamMembers(teamService.getTeamMembers());
+
+    const loadTeam = async () => {
+      try {
+        setIsLoading(true);
+        const data = await teamService.getTeamMembers();
+        setTeamMembers(data);
+      } catch (err) {
+        console.error('Gagal memuat anggota tim:', err);
+        // boleh diganti toast kalau mau
+        alert(err instanceof Error ? err.message : 'Gagal memuat data anggota tim dari server');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTeam();
   }, []);
 
   return (
@@ -43,48 +59,60 @@ const TeamPage: React.FC = () => {
             <p className="mt-4 text-lg text-viniela-gray">{t.team.sectionSubtitle}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {teamMembers.map((member) => (
-              <div
-                key={member.id}
-                className="group flex flex-col items-center text-center bg-white rounded-xl shadow-lg p-6 transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-2"
-              >
-                <div className="relative">
-                  <img
-                    src={member.imageUrl}
-                    alt={member.name}
-                    className="w-40 h-40 rounded-full object-cover shadow-md border-4 border-white transition-transform duration-300 group-hover:scale-105"
-                  />
-                  {member.linkedinUrl && (
-                    <a
-                      href={member.linkedinUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute bottom-2 right-2 p-2 bg-viniela-gold text-white rounded-full transition-opacity duration-300 opacity-0 group-hover:opacity-100 hover:bg-viniela-gold-dark"
-                    >
-                      <LinkedInIcon />
-                    </a>
-                  )}
+          {isLoading ? (
+            <p className="text-center text-viniela-gray py-8">
+              {t.team.loading || 'Memuat data tim...'}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              {teamMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="group flex flex-col items-center text-center bg-white rounded-xl shadow-lg p-6 transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-2"
+                >
+                  <div className="relative">
+                    <img
+                      src={member.imageUrl}
+                      alt={member.name}
+                      className="w-40 h-40 rounded-full object-cover shadow-md border-4 border-white transition-transform duration-300 group-hover:scale-105"
+                    />
+                    {member.linkedinUrl && (
+                      <a
+                        href={member.linkedinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute bottom-2 right-2 p-2 bg-viniela-gold text-white rounded-full transition-opacity duration-300 opacity-0 group-hover:opacity-100 hover:bg-viniela-gold-dark"
+                      >
+                        <LinkedInIcon />
+                      </a>
+                    )}
+                  </div>
+                  <h3 className="mt-5 text-xl font-bold text-viniela-dark">{member.name}</h3>
+                  <p className="mt-1 text-viniela-gold font-semibold">{member.title.id}</p>
+                  <p className="mt-3 text-sm text-viniela-gray flex-grow">{member.bio.id}</p>
                 </div>
-                <h3 className="mt-5 text-xl font-bold text-viniela-dark">{member.name}</h3>
-                <p className="mt-1 text-viniela-gold font-semibold">{member.title[language]}</p>
-                <p className="mt-3 text-sm text-viniela-gray flex-grow">{member.bio[language]}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+
+              {!isLoading && teamMembers.length === 0 && (
+                <p className="col-span-full text-center text-viniela-gray py-8">
+                  {t.team.empty || 'Belum ada data tim.'}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
       <CTA />
       <style>{`
-                @keyframes fade-in-up {
-                    0% { opacity: 0; transform: translateY(20px); }
-                    100% { opacity: 1; transform: translateY(0); }
-                }
-                .animate-fade-in-up { 
-                    animation: fade-in-up 0.6s ease-out forwards; 
-                }
-            `}</style>
+        @keyframes fade-in-up {
+          0% { opacity: 0; transform: translateY(20px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up { 
+          animation: fade-in-up 0.6s ease-out forwards; 
+        }
+      `}</style>
     </div>
   );
 };

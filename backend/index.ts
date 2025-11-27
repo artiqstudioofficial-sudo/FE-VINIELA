@@ -1,13 +1,14 @@
 // src/index.ts
-import cors from "cors";
-import express, { Request, Response } from "express";
-import path from "path";
+import cors from 'cors';
+import express, { Request, Response } from 'express';
 
-import { query } from "./lib/db";
-import { UPLOAD_ROOT } from "./config/upload";
-import newsRoutes from "./routes/newsRoutes";
-import uploadRoutes from "./routes/uploadRoutes";
-import careersRoutes from "./routes/careersRoutes";
+import { UPLOAD_ROOT } from './config/upload';
+import { query } from './lib/db';
+import careersRoutes from './routes/careersRoutes';
+import newsRoutes from './routes/newsRoutes';
+import partnerRoutes from './routes/partnerRoutes'; // ⬅️ TAMBAHAN
+import teamRoutes from './routes/teamRoutes';
+import uploadRoutes from './routes/uploadRoutes';
 
 const app = express();
 const PORT = 4000;
@@ -17,7 +18,7 @@ const PORT = 4000;
 /* -------------------------------------------------------------------------- */
 
 // Serve file statis dari folder uploads
-app.use("/uploads", express.static(UPLOAD_ROOT));
+app.use('/uploads', express.static(UPLOAD_ROOT));
 
 /* -------------------------------------------------------------------------- */
 /*                                 MIDDLEWARE                                 */
@@ -26,14 +27,14 @@ app.use("/uploads", express.static(UPLOAD_ROOT));
 app.use(cors());
 app.use(
   express.json({
-    limit: "20mb",
-  })
+    limit: '20mb',
+  }),
 );
 app.use(
   express.urlencoded({
     extended: true,
-    limit: "20mb",
-  })
+    limit: '20mb',
+  }),
 );
 
 /* -------------------------------------------------------------------------- */
@@ -41,21 +42,27 @@ app.use(
 /* -------------------------------------------------------------------------- */
 
 // routes upload media (mounted di /api/news)
-app.use("/api/news", uploadRoutes);
+app.use('/api/news', uploadRoutes);
 
 // routes news CRUD
-app.use("/api/news", newsRoutes);
+app.use('/api/news', newsRoutes);
 
 // routes careers CRUD
-app.use("/api/careers", careersRoutes);
+app.use('/api/careers', careersRoutes);
+
+// routes team CRUD
+app.use('/api/team', teamRoutes);
+
+// routes partners CRUD
+app.use('/api/partners', partnerRoutes);
 
 /**
  * GET /api/db-test
  * Cek koneksi DB
  */
-app.get("/api/db-test", async (_: Request, res: Response) => {
+app.get('/api/db-test', async (_: Request, res: Response) => {
   try {
-    const tables = await query<any>("SHOW TABLES");
+    const tables = await query<any>('SHOW TABLES');
     res.json({ ok: true, tables });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });

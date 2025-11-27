@@ -6,19 +6,44 @@ import { JobApplication, JobListing } from '../types';
 
 const CareersDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { t, language } = useTranslations();
+  const { t } = useTranslations();
+
   const [job, setJob] = useState<JobListing | null>(null);
-  const [formState, setFormState] = useState({ name: '', email: '', phone: '', coverLetter: '' });
+  const [formState, setFormState] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    coverLetter: '',
+  });
   const [resume, setResume] = useState<{ file: File; base64: string } | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isLoadingJob, setIsLoadingJob] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  /* --------------------------- Load job dari API --------------------------- */
   useEffect(() => {
-    if (id) {
-      const foundJob = careersService.getJobListingById(id);
-      setJob(foundJob || null);
-    }
     window.scrollTo(0, 0);
+
+    if (!id) return;
+
+    const loadJob = async () => {
+      try {
+        setIsLoadingJob(true);
+        const foundJob = await careersService.getJobListingById(id);
+        setJob(foundJob || null);
+      } catch (err) {
+        console.error('Gagal memuat detail job:', err);
+        // Bisa diganti toast kalau ada
+        alert(err instanceof Error ? err.message : 'Gagal memuat detail lowongan dari server');
+      } finally {
+        setIsLoadingJob(false);
+      }
+    };
+
+    loadJob();
   }, [id]);
+
+  /* ----------------------------- Form handlers ---------------------------- */
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -36,20 +61,32 @@ const CareersDetailPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!job || !resume) return;
 
+    // Sesuai type lama: tetap pakai base64, tapi judul sekarang dari title.id
     const application: Omit<JobApplication, 'id' | 'date'> = {
       jobId: job.id,
-      jobTitle: job.title.en, // Store english title as a fallback
+      jobTitle: job.title.id, // sekarang pakai 1 bahasa (id) sebagai sumber
       ...formState,
       resume: resume.base64,
       resumeFileName: resume.file.name,
     };
-    careersService.addApplication(application);
-    setIsSubmitted(true);
+
+    try {
+      setIsSubmitting(true);
+      await careersService.addApplication(application);
+      setIsSubmitted(true);
+    } catch (err) {
+      console.error('Gagal mengirim lamaran:', err);
+      alert(err instanceof Error ? err.message : 'Gagal mengirim lamaran pekerjaan ke server');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  /* ------------------------------- UI states ------------------------------ */
 
   if (isSubmitted) {
     return (
@@ -74,6 +111,14 @@ const CareersDetailPage: React.FC = () => {
     );
   }
 
+  if (isLoadingJob) {
+    return (
+      <div className="container mx-auto px-6 py-20 text-center min-h-[50vh]">
+        {t.careers.loading || 'Memuat detail lowongan...'}
+      </div>
+    );
+  }
+
   if (!job) {
     return (
       <div className="container mx-auto px-6 py-20 text-center min-h-[50vh]">
@@ -81,6 +126,8 @@ const CareersDetailPage: React.FC = () => {
       </div>
     );
   }
+
+  /* ------------------------------- Main view ------------------------------ */
 
   return (
     <div className="bg-white animate-fade-in-up">
@@ -98,7 +145,7 @@ const CareersDetailPage: React.FC = () => {
 
         <header className="mb-10 text-center border-b pb-8">
           <h1 className="text-4xl md:text-5xl font-extrabold text-viniela-dark leading-tight">
-            {job.title[language]}
+            {job.title.id}
           </h1>
           <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-2 text-viniela-gray mt-4">
             <span className="flex items-center text-lg">
@@ -107,7 +154,7 @@ const CareersDetailPage: React.FC = () => {
             </span>
             <span className="flex items-center text-lg">
               <i className="fa-solid fa-location-dot w-5 h-5 mr-2" aria-hidden="true"></i>
-              {job.location[language]}
+              {job.location.id}
             </span>
           </div>
         </header>
@@ -126,7 +173,7 @@ const CareersDetailPage: React.FC = () => {
               </div>
               <div
                 className="prose prose-lg max-w-none text-viniela-gray pl-16"
-                dangerouslySetInnerHTML={{ __html: job.description[language] }}
+                dangerouslySetInnerHTML={{ __html: job.description.id }}
               />
             </section>
 
@@ -142,7 +189,7 @@ const CareersDetailPage: React.FC = () => {
               </div>
               <div
                 className="prose prose-lg max-w-none text-viniela-gray pl-16"
-                dangerouslySetInnerHTML={{ __html: job.responsibilities[language] }}
+                dangerouslySetInnerHTML={{ __html: job.responsibilities.id }}
               />
             </section>
 
@@ -158,7 +205,7 @@ const CareersDetailPage: React.FC = () => {
               </div>
               <div
                 className="prose prose-lg max-w-none text-viniela-gray pl-16"
-                dangerouslySetInnerHTML={{ __html: job.qualifications[language] }}
+                dangerouslySetInnerHTML={{ __html: job.qualifications.id }}
               />
             </section>
           </article>
@@ -219,8 +266,10 @@ const CareersDetailPage: React.FC = () => {
                     className="form-input"
                   />
                 </div>
-                <button type="submit" className="w-full btn-primary mt-4">
-                  {t.careersDetail.submitApplication}
+                <button type="submit" className="w-full btn-primary mt-4" disabled={isSubmitting}>
+                  {isSubmitting
+                    ? t.careersDetail.submitting || 'Mengirim lamaran...'
+                    : t.careersDetail.submitApplication}
                 </button>
               </form>
             </div>
@@ -228,16 +277,16 @@ const CareersDetailPage: React.FC = () => {
         </div>
       </div>
       <style>{`
-                .form-label { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; font-weight: 500; color: #4d4d4d; }
-                .form-input { display: block; width: 100%; border-radius: 0.375rem; border: 1px solid #d1d5db; padding: 0.5rem 0.75rem; }
-                .form-input:focus { outline: 2px solid transparent; outline-offset: 2px; border-color: #c09a58; box-shadow: 0 0 0 2px #c09a58; }
-                .btn-primary { padding: 0.75rem 1.5rem; background-color: #c09a58; color: white; border-radius: 0.375rem; font-weight: 600; transition: background-color 0.2s; border: none; cursor: pointer; }
-                .btn-primary:hover { background-color: #b08b49; }
-                @keyframes fade-in-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
-                .animate-fade-in-up { animation: fade-in-up 0.5s ease-out forwards; }
-                .prose ul > li::before { background-color: #c09a58; }
-                .prose ol > li::before { color: #c09a58; font-weight: bold; }
-            `}</style>
+        .form-label { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; font-weight: 500; color: #4d4d4d; }
+        .form-input { display: block; width: 100%; border-radius: 0.375rem; border: 1px solid #d1d5db; padding: 0.5rem 0.75rem; }
+        .form-input:focus { outline: 2px solid transparent; outline-offset: 2px; border-color: #c09a58; box-shadow: 0 0 0 2px #c09a58; }
+        .btn-primary { padding: 0.75rem 1.5rem; background-color: #c09a58; color: white; border-radius: 0.375rem; font-weight: 600; transition: background-color 0.2s; border: none; cursor: pointer; }
+        .btn-primary:hover { background-color: #b08b49; }
+        @keyframes fade-in-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in-up { animation: fade-in-up 0.5s ease-out forwards; }
+        .prose ul > li::before { background-color: #c09a58; }
+        .prose ol > li::before { color: #c09a58; font-weight: bold; }
+      `}</style>
     </div>
   );
 };

@@ -6,34 +6,63 @@ import * as careersService from '../services/careersService';
 import { JobListing } from '../types';
 
 const CareersPage: React.FC = () => {
-  const { t, language } = useTranslations();
+  const { t } = useTranslations();
   const [allJobs, setAllJobs] = useState<JobListing[]>([]);
   const [filteredJobs, setFilteredJobs] = useState<JobListing[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
+  /* -------------------------- Load jobs dari API -------------------------- */
   useEffect(() => {
     window.scrollTo(0, 0);
-    const jobs = careersService.getJobListings();
-    const sortedJobs = jobs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    setAllJobs(sortedJobs);
+
+    const loadJobs = async () => {
+      try {
+        setIsLoading(true);
+        const jobs = await careersService.getJobListings();
+
+        const sortedJobs = [...jobs].sort((a, b) => {
+          const da = a.date ? new Date(a.date).getTime() : 0;
+          const db = b.date ? new Date(b.date).getTime() : 0;
+          return db - da;
+        });
+
+        setAllJobs(sortedJobs);
+      } catch (err) {
+        console.error('Gagal memuat job listings:', err);
+        const msg = err instanceof Error ? err.message : 'Gagal memuat daftar lowongan dari server';
+        // kalau punya toast global bisa dipakai di sini, sementara console saja
+        alert(msg);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadJobs();
   }, []);
 
+  /* ------------------------------ Filter search --------------------------- */
   useEffect(() => {
     let jobs = [...allJobs];
+
     if (searchQuery) {
       const lowercasedQuery = searchQuery.toLowerCase();
-      jobs = jobs.filter(
-        (job) =>
-          job.title[language].toLowerCase().includes(lowercasedQuery) ||
-          job.location[language].toLowerCase().includes(lowercasedQuery) ||
-          job.description[language]
-            .replace(/<[^>]+>/g, '')
-            .toLowerCase()
-            .includes(lowercasedQuery),
-      );
+
+      jobs = jobs.filter((job) => {
+        const titleText = job.title.id?.toLowerCase() ?? '';
+        const locationText = job.location.id?.toLowerCase() ?? '';
+        const descriptionText = job.description?.id?.replace(/<[^>]+>/g, '').toLowerCase() ?? '';
+
+        return (
+          titleText.includes(lowercasedQuery) ||
+          locationText.includes(lowercasedQuery) ||
+          descriptionText.includes(lowercasedQuery)
+        );
+      });
     }
+
     setFilteredJobs(jobs);
-  }, [searchQuery, allJobs, language]);
+  }, [searchQuery, allJobs]);
 
   return (
     <div className="bg-viniela-silver animate-fade-in-up">
@@ -71,7 +100,13 @@ const CareersPage: React.FC = () => {
             />
           </div>
 
-          {filteredJobs.length > 0 ? (
+          {isLoading ? (
+            <div className="text-center py-16 bg-white rounded-xl shadow-md">
+              <p className="text-xl text-viniela-gray">
+                {t.careers.loading || 'Memuat lowongan pekerjaan...'}
+              </p>
+            </div>
+          ) : filteredJobs.length > 0 ? (
             <div className="max-w-4xl mx-auto space-y-6">
               {filteredJobs.map((job) => (
                 <div
@@ -79,7 +114,7 @@ const CareersPage: React.FC = () => {
                   className="bg-white rounded-xl shadow-lg p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-shadow hover:shadow-xl"
                 >
                   <div className="flex-grow">
-                    <h3 className="text-2xl font-bold text-viniela-dark">{job.title[language]}</h3>
+                    <h3 className="text-2xl font-bold text-viniela-dark">{job.title.id}</h3>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-viniela-gray mt-2">
                       <span className="flex items-center text-sm">
                         <i className="fa-solid fa-briefcase w-4 h-4 mr-2" aria-hidden="true"></i>
@@ -87,7 +122,7 @@ const CareersPage: React.FC = () => {
                       </span>
                       <span className="flex items-center text-sm">
                         <i className="fa-solid fa-location-dot w-4 h-4 mr-2" aria-hidden="true"></i>
-                        {job.location[language]}
+                        {job.location.id}
                       </span>
                     </div>
                   </div>
@@ -112,20 +147,20 @@ const CareersPage: React.FC = () => {
 
       <CTA />
       <style>{`
-              @keyframes fade-in-up {
-                0% {
-                  opacity: 0;
-                  transform: translateY(20px);
-                }
-                100% {
-                  opacity: 1;
-                  transform: translateY(0);
-                }
-              }
-              .animate-fade-in-up {
-                animation: fade-in-up 0.5s ease-out forwards;
-              }
-            `}</style>
+        @keyframes fade-in-up {
+          0% {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.5s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 };

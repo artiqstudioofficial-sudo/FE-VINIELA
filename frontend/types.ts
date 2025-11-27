@@ -1,9 +1,9 @@
 // FIX: Import React types to resolve 'Cannot find namespace React' error.
-import type * as React from "react";
+import type * as React from 'react';
 
-export type Language = "id" | "en" | "cn";
-export type NewsCategory = "company" | "division" | "industry" | "press";
-export type JobType = "Full-time" | "Part-time" | "Contract" | "Internship";
+export type Language = 'id' | 'en' | 'cn';
+export type NewsCategory = 'company' | 'division' | 'industry' | 'press';
+export type JobType = 'Full-time' | 'Part-time' | 'Contract' | 'Internship';
 
 export interface NewsArticle {
   id: string;

@@ -1,118 +1,124 @@
 import { TeamMember } from '../types';
 
-export const TEAM_STORAGE_KEY = 'vinielaTeam';
+const API_BASE = 'http://localhost:4000';
+const TEAM_ENDPOINT = `${API_BASE}/api/team`;
 
-const initialTeam: TeamMember[] = [
-  {
-    id: '1',
-    name: 'Budi Hartono',
-    title: {
-      id: 'CEO & Pendiri',
-      en: 'CEO & Founder',
-      cn: '首席执行官兼创始人',
-    },
-    bio: {
-      id: 'Budi adalah seorang visioner dengan pengalaman lebih dari 20 tahun dalam memimpin perusahaan menuju kesuksesan di berbagai industri.',
-      en: 'Budi is a visionary with over 20 years of experience leading companies to success across multiple industries.',
-      cn: 'Budi是一位富有远见的领导者，拥有超过20年的跨行业成功领导公司的经验。',
-    },
-    imageUrl: 'https://picsum.photos/seed/budi/400/400',
-    linkedinUrl: 'https://linkedin.com/',
-  },
-  {
-    id: '2',
-    name: 'Siti Aminah',
-    title: {
-      id: 'Chief Operating Officer',
-      en: 'Chief Operating Officer',
-      cn: '首席运营官',
-    },
-    bio: {
-      id: 'Siti ahli dalam mengoptimalkan operasi bisnis dan memastikan keunggulan dalam setiap proyek yang dijalankan oleh VINIELA Group.',
-      en: 'Siti excels at optimizing business operations and ensuring excellence in every project undertaken by VINIELA Group.',
-      cn: 'Siti擅长优化业务运营，并确保VINIELA集团承接的每个项目都达到卓越水平。',
-    },
-    imageUrl: 'https://picsum.photos/seed/siti/400/400',
-    linkedinUrl: 'https://linkedin.com/',
-  },
-  {
-    id: '3',
-    name: 'Eko Wijoyo',
-    title: {
-      id: 'Chief Technology Officer',
-      en: 'Chief Technology Officer',
-      cn: '首席技术官',
-    },
-    bio: {
-      id: 'Eko mendorong inovasi digital di VINIELA, memanfaatkan teknologi terbaru untuk memberikan solusi canggih kepada klien kami.',
-      en: 'Eko drives digital innovation at VINIELA, leveraging the latest technologies to provide cutting-edge solutions to our clients.',
-      cn: 'Eko在VINIELA推动数字创新，利用最新技术为我们的客户提供尖端解决方案。',
-    },
-    imageUrl: 'https://picsum.photos/seed/eko/400/400',
-    linkedinUrl: 'https://linkedin.com/',
-  },
-   {
-    id: '4',
-    name: 'Dewi Lestari',
-    title: {
-      id: 'Kepala Divisi Hukum',
-      en: 'Head of Legal Division',
-      cn: '法律部门主管',
-    },
-    bio: {
-      id: 'Dewi memimpin tim hukum kami dengan keahlian mendalam, memastikan kepatuhan dan memberikan nasihat strategis yang tak ternilai.',
-      en: 'Dewi leads our legal team with deep expertise, ensuring compliance and providing invaluable strategic advice.',
-      cn: 'Dewi以其深厚的专业知识领导我们的法律团队，确保合规并提供宝贵的战略建议。',
-    },
-    imageUrl: 'https://picsum.photos/seed/dewi/400/400',
-  },
-];
+export type TeamFormPayload = Omit<TeamMember, 'id'>;
 
-export const getTeamMembers = (): TeamMember[] => {
-  try {
-    const teamJson = localStorage.getItem(TEAM_STORAGE_KEY);
-    if (teamJson) {
-      return JSON.parse(teamJson);
-    } else {
-      localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(initialTeam));
-      return initialTeam;
+interface ListResponse {
+  data: TeamMember[];
+}
+
+interface DetailResponse {
+  data: TeamMember;
+}
+
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let msg = `Request failed with status ${res.status}`;
+    try {
+      const json = await res.json();
+      if (json?.error) msg = json.error;
+    } catch {
+      // ignore JSON parse error
     }
-  } catch (error) {
-    console.error('Failed to parse team members from localStorage', error);
-    return initialTeam;
+    throw new Error(msg);
   }
+  return res.json() as Promise<T>;
+}
+
+/**
+ * Ambil semua anggota team dari backend
+ */
+export const getTeamMembers = async (): Promise<TeamMember[]> => {
+  const res = await fetch(TEAM_ENDPOINT, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  const json = await handleResponse<ListResponse>(res);
+  return json.data;
 };
 
-export const saveTeamMembers = (members: TeamMember[]) => {
-  try {
-    localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(members));
-  } catch (error) {
-    console.error('Failed to save team members to localStorage', error);
-  }
-};
-
-export const addTeamMember = (member: Omit<TeamMember, 'id'>): TeamMember => {
-  const members = getTeamMembers();
-  const newMember: TeamMember = {
-    ...member,
-    id: new Date().getTime().toString(),
+/**
+ * Tambah anggota team baru
+ */
+export const addTeamMember = async (member: TeamFormPayload): Promise<TeamMember> => {
+  // Backend hanya butuh title.id & bio.id, tapi aman kalau kita kirim en/cn juga
+  const payload = {
+    name: member.name,
+    title: {
+      id: member.title.id,
+      en: member.title.en ?? '',
+      cn: member.title.cn ?? '',
+    },
+    bio: {
+      id: member.bio.id,
+      en: member.bio.en ?? '',
+      cn: member.bio.cn ?? '',
+    },
+    imageUrl: member.imageUrl,
+    linkedinUrl: member.linkedinUrl || '',
   };
-  const updatedMembers = [newMember, ...members];
-  saveTeamMembers(updatedMembers);
-  return newMember;
+
+  const res = await fetch(TEAM_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await handleResponse<DetailResponse>(res);
+  return json.data;
 };
 
-export const updateTeamMember = (updatedMember: TeamMember): TeamMember => {
-  const members = getTeamMembers();
-  const updatedMembers = members.map(member =>
-    member.id === updatedMember.id ? updatedMember : member
-  );
-  saveTeamMembers(updatedMembers);
-  return updatedMember;
+/**
+ * Update anggota team
+ */
+export const updateTeamMember = async (updatedMember: TeamMember): Promise<TeamMember> => {
+  const payload = {
+    name: updatedMember.name,
+    title: {
+      id: updatedMember.title.id,
+      en: updatedMember.title.en ?? '',
+      cn: updatedMember.title.cn ?? '',
+    },
+    bio: {
+      id: updatedMember.bio.id,
+      en: updatedMember.bio.en ?? '',
+      cn: updatedMember.bio.cn ?? '',
+    },
+    imageUrl: updatedMember.imageUrl,
+    linkedinUrl: updatedMember.linkedinUrl || '',
+  };
+
+  const res = await fetch(`${TEAM_ENDPOINT}/${updatedMember.id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await handleResponse<DetailResponse>(res);
+  return json.data;
 };
 
-export const deleteTeamMember = (memberId: string) => {
-  const members = getTeamMembers();
-  const updatedMembers = members.filter(member => member.id !== memberId);
-  saveTeamMembers(updatedMembers);
+/**
+ * Hapus anggota team
+ */
+export const deleteTeamMember = async (memberId: string): Promise<void> => {
+  const res = await fetch(`${TEAM_ENDPOINT}/${memberId}`, {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  await handleResponse<{ ok: boolean }>(res);
 };

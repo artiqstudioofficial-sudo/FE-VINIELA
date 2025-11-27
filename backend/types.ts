@@ -2,7 +2,7 @@
 /*                                   NEWS                                     */
 /* -------------------------------------------------------------------------- */
 
-export type NewsCategory = "company" | "division" | "industry" | "press";
+export type NewsCategory = 'company' | 'division' | 'industry' | 'press';
 
 export interface NewsRow {
   id: string;
@@ -35,11 +35,12 @@ export interface NewsArticleDto {
   };
   imageUrls: string[];
 }
+
 /* -------------------------------------------------------------------------- */
 /*                               CAREERS / JOBS                               */
 /* -------------------------------------------------------------------------- */
 
-export type JobType = "Full-time" | "Part-time" | "Contract" | "Internship";
+export type JobType = 'Full-time' | 'Part-time' | 'Contract' | 'Internship';
 
 /* ------------------------------- Job Listing ------------------------------- */
 
@@ -95,4 +96,50 @@ export interface JobApplicationDto {
   resumeFileName: string;
   coverLetter: string | null; // BUKAN optional, tapi bisa null
   date: string; // ISO string
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               TEAM MEMBERS                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface TeamMemberRow {
+  id: string;
+  name: string;
+  title_id: string; // jabatan (single bahasa)
+  bio_id: string; // bio (single bahasa)
+  image_url: string;
+  linkedin_url: string | null;
+  created_at: Date | string;
+  updated_at: Date | string | null;
+}
+
+export interface TeamMemberDto {
+  id: string;
+  name: string;
+  title: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  bio: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  imageUrl: string;
+  linkedinUrl: string; // di-mapping jadi string kosong kalau null di DB
+}
+
+export interface PartnerRow {
+  id: string;
+  name: string;
+  logo_url: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface PartnerDto {
+  id: string;
+  name: string;
+  logoUrl: string;
 }

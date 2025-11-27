@@ -1,34 +1,31 @@
-import React, { FormEvent, useEffect, useMemo, useState } from "react";
+import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 
-import { useTranslations } from "../../contexts/i18n";
+import { useTranslations } from '../../contexts/i18n';
 
-import ImageUploader from "../../components/ImageUploader";
-import ConfirmationModal from "../../components/ConfirmationModal";
+import ConfirmationModal from '../../components/ConfirmationModal';
+import ImageUploader from '../../components/ImageUploader';
 
-import * as partnerService from "../../services/partnerService";
+import * as partnerService from '../../services/partnerService';
 
-import { Partner } from "../../types";
+import { Partner } from '../../types';
 
-type ToastFn = (message: string, type?: "success" | "error") => void;
+type ToastFn = (message: string, type?: 'success' | 'error') => void;
 
 interface PartnerManagementViewProps {
   showToast: ToastFn;
 }
 
-const emptyPartner: Omit<Partner, "id"> = {
-  name: "",
-  logoUrl: "",
+const emptyPartner: Omit<Partner, 'id'> = {
+  name: '',
+  logoUrl: '',
 };
 
-const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
-  showToast,
-}) => {
+const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({ showToast }) => {
   const { t } = useTranslations();
 
   const [partners, setPartners] = useState<Partner[]>([]);
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
-  const [partnerFormData, setPartnerFormData] =
-    useState<Omit<Partner, "id">>(emptyPartner);
+  const [partnerFormData, setPartnerFormData] = useState<Omit<Partner, 'id'>>(emptyPartner);
 
   const [partnerFormErrors, setPartnerFormErrors] = useState<{
     [key: string]: string;
@@ -36,14 +33,33 @@ const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
 
   const [partnerToDelete, setPartnerToDelete] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingList, setIsLoadingList] = useState(false);
+
+  /* ----------------------------- Load dari API ----------------------------- */
 
   useEffect(() => {
-    setPartners(partnerService.getPartners());
-  }, []);
+    const loadPartners = async () => {
+      try {
+        setIsLoadingList(true);
+        const data = await partnerService.getPartners();
+        setPartners(data);
+      } catch (err) {
+        console.error('Gagal memuat partners:', err);
+        const msg = err instanceof Error ? err.message : 'Gagal memuat data partner dari server';
+        showToast(msg, 'error');
+      } finally {
+        setIsLoadingList(false);
+      }
+    };
+
+    loadPartners();
+  }, [showToast]);
+
+  /* -------------------------- Form helpers/validation ---------------------- */
 
   const validateField = (name: string, value: string) => {
-    let error = "";
-    if (!value || value.trim() === "") {
+    let error = '';
+    if (!value || value.trim() === '') {
       error = t.admin.validation.required;
     }
     setPartnerFormErrors((prev) => ({ ...prev, [name]: error }));
@@ -60,8 +76,11 @@ const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
     setPartnerFormErrors({});
   };
 
-  const handlePartnerFormSubmit = (e: FormEvent) => {
+  /* ------------------------------ Submit form ------------------------------ */
+
+  const handlePartnerFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
     const errors: { [key: string]: string } = {};
     if (!partnerFormData.name) errors.name = t.admin.validation.required;
     if (!partnerFormData.logoUrl) errors.logoUrl = t.admin.validation.required;
@@ -69,22 +88,33 @@ const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
     if (Object.values(errors).some((e) => e)) return;
 
     setIsSaving(true);
-    setTimeout(() => {
+    try {
       if (editingPartner) {
-        partnerService.updatePartner({
+        // update existing partner
+        const updated = await partnerService.updatePartner({
           ...editingPartner,
           ...partnerFormData,
         });
+        setPartners((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
         showToast(t.admin.toast.partnerUpdated);
       } else {
-        partnerService.addPartner(partnerFormData);
+        // create new partner
+        const created = await partnerService.addPartner(partnerFormData);
+        setPartners((prev) => [created, ...prev]);
         showToast(t.admin.toast.partnerCreated);
       }
-      setPartners(partnerService.getPartners());
+
       resetPartnerForm();
+    } catch (err) {
+      console.error('Gagal menyimpan partner:', err);
+      const msg = err instanceof Error ? err.message : 'Gagal menyimpan data partner ke server';
+      showToast(msg, 'error');
+    } finally {
       setIsSaving(false);
-    }, 500);
+    }
   };
+
+  /* ---------------------------- Edit / Delete ------------------------------ */
 
   const handleEditPartner = (partner: Partner) => {
     setEditingPartner(partner);
@@ -96,15 +126,25 @@ const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
     window.scrollTo(0, 0);
   };
 
-  const confirmDeletePartner = () => {
-    if (partnerToDelete) {
-      partnerService.deletePartner(partnerToDelete);
-      setPartners(partnerService.getPartners());
+  const confirmDeletePartner = async () => {
+    if (!partnerToDelete) return;
+
+    try {
+      await partnerService.deletePartner(partnerToDelete);
+      setPartners((prev) => prev.filter((partner) => partner.id !== partnerToDelete));
       if (editingPartner?.id === partnerToDelete) resetPartnerForm();
       setPartnerToDelete(null);
-      showToast(t.admin.toast.partnerDeleted ?? "Partner deleted");
+      showToast(t.admin.toast.partnerDeleted ?? 'Partner deleted');
+    } catch (err) {
+      console.error('Gagal menghapus partner:', err);
+      const msg = err instanceof Error ? err.message : 'Gagal menghapus partner di server';
+      showToast(msg, 'error');
+    } finally {
+      setPartnerToDelete(null);
     }
   };
+
+  /* ------------------------------ Derived state ---------------------------- */
 
   const isPartnerFormValid = useMemo(() => {
     return (
@@ -113,6 +153,8 @@ const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
       partnerFormData.logoUrl
     );
   }, [partnerFormErrors, partnerFormData.name, partnerFormData.logoUrl]);
+
+  /* --------------------------------- Render -------------------------------- */
 
   return (
     <>
@@ -136,24 +178,18 @@ const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
               <input
                 type="text"
                 value={partnerFormData.name}
-                onChange={(e) =>
-                  handlePartnerFormChange("name", e.target.value)
-                }
-                className={`form-input ${
-                  partnerFormErrors.name ? "border-red-500" : ""
-                }`}
+                onChange={(e) => handlePartnerFormChange('name', e.target.value)}
+                className={`form-input ${partnerFormErrors.name ? 'border-red-500' : ''}`}
                 placeholder={t.admin.partnerNamePlaceholder}
               />
-              {partnerFormErrors.name && (
-                <p className="form-error">{partnerFormErrors.name}</p>
-              )}
+              {partnerFormErrors.name && <p className="form-error">{partnerFormErrors.name}</p>}
             </div>
 
             <div>
               <label className="form-label">{t.admin.logoLabel}</label>
               <ImageUploader
                 value={partnerFormData.logoUrl}
-                onChange={(val) => handlePartnerFormChange("logoUrl", val)}
+                onChange={(val) => handlePartnerFormChange('logoUrl', val)}
               />
               {partnerFormErrors.logoUrl && (
                 <p className="form-error">{partnerFormErrors.logoUrl}</p>
@@ -162,11 +198,7 @@ const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
 
             <div className="flex justify-end items-center space-x-3 pt-4">
               {editingPartner && (
-                <button
-                  type="button"
-                  onClick={resetPartnerForm}
-                  className="btn-secondary"
-                >
+                <button type="button" onClick={resetPartnerForm} className="btn-secondary">
                   {t.admin.cancelButton}
                 </button>
               )}
@@ -175,9 +207,7 @@ const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
                 className="btn-primary"
                 disabled={isSaving || !isPartnerFormValid}
               >
-                {isSaving && (
-                  <i className="fa-solid fa-spinner fa-spin w-5 h-5 mr-2" />
-                )}
+                {isSaving && <i className="fa-solid fa-spinner fa-spin w-5 h-5 mr-2" />}
                 {isSaving
                   ? t.admin.savingButton
                   : editingPartner
@@ -194,43 +224,50 @@ const PartnerManagementView: React.FC<PartnerManagementViewProps> = ({
             <h2 className="text-xl font-bold mb-4 text-viniela-dark border-b pb-3">
               {t.admin.currentPartners}
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {partners.length > 0 ? (
-                partners.map((partner) => (
-                  <div
-                    key={partner.id}
-                    className="bg-viniela-silver/50 p-4 rounded-lg flex flex-col items-center relative group"
-                  >
-                    <img
-                      src={partner.logoUrl}
-                      alt={partner.name}
-                      className="h-12 object-contain mb-2"
-                    />
-                    <p className="text-xs text-center font-medium text-viniela-gray">
-                      {partner.name}
-                    </p>
-                    <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 gap-2">
-                      <button
-                        onClick={() => handleEditPartner(partner)}
-                        className="p-2 bg-white rounded-full text-blue-600 hover:text-blue-800"
-                      >
-                        <i className="fa-solid fa-pencil"></i>
-                      </button>
-                      <button
-                        onClick={() => setPartnerToDelete(partner.id)}
-                        className="p-2 bg-white rounded-full text-red-600 hover:text-red-800"
-                      >
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
+
+            {isLoadingList ? (
+              <p className="col-span-full text-center text-viniela-gray py-8">
+                {t.admin.loading || 'Memuat data partner...'}
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {partners.length > 0 ? (
+                  partners.map((partner) => (
+                    <div
+                      key={partner.id}
+                      className="bg-viniela-silver/50 p-4 rounded-lg flex flex-col items-center relative group"
+                    >
+                      <img
+                        src={partner.logoUrl}
+                        alt={partner.name}
+                        className="h-12 object-contain mb-2"
+                      />
+                      <p className="text-xs text-center font-medium text-viniela-gray">
+                        {partner.name}
+                      </p>
+                      <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 gap-2">
+                        <button
+                          onClick={() => handleEditPartner(partner)}
+                          className="p-2 bg-white rounded-full text-blue-600 hover:text-blue-800"
+                        >
+                          <i className="fa-solid fa-pencil"></i>
+                        </button>
+                        <button
+                          onClick={() => setPartnerToDelete(partner.id)}
+                          className="p-2 bg-white rounded-full text-red-600 hover:text-red-800"
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <p className="col-span-full text-center text-viniela-gray py-8">
-                  {t.admin.noPartners}
-                </p>
-              )}
-            </div>
+                  ))
+                ) : (
+                  <p className="col-span-full text-center text-viniela-gray py-8">
+                    {t.admin.noPartners}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

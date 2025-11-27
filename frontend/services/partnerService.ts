@@ -1,86 +1,90 @@
+// src/services/partnerService.ts
 import { Partner } from '../types';
 
-export const PARTNERS_STORAGE_KEY = 'vinielaPartners';
+const API_BASE_URL = 'http://localhost:4000';
+const PARTNERS_API_URL = `${API_BASE_URL}/api/partners`;
 
-// Using placeholder images for initial data
-const initialPartners: Partner[] = [
-  {
-    id: '1',
-    name: 'Apex Innovations',
-    logoUrl: 'https://via.placeholder.com/150x50/F0F2F5/4D4D4D?text=APEX',
-  },
-  {
-    id: '2',
-    name: 'Quantum Solutions',
-    logoUrl: 'https://via.placeholder.com/150x50/F0F2F5/4D4D4D?text=Quantum',
-  },
-  {
-    id: '3',
-    name: 'Nexus Corp',
-    logoUrl: 'https://via.placeholder.com/150x50/F0F2F5/4D4D4D?text=NEXUS',
-  },
-  {
-    id: '4',
-    name: 'Innovate Hub',
-    logoUrl: 'https://via.placeholder.com/150x50/F0F2F5/4D4D4D?text=Innovate',
-  },
-  {
-    id: '5',
-    name: 'Stellar Group',
-    logoUrl: 'https://via.placeholder.com/150x50/F0F2F5/4D4D4D?text=Stellar',
-  },
-  {
-    id: '6',
-    name: 'Orbit Enterprises',
-    logoUrl: 'https://via.placeholder.com/150x50/F0F2F5/4D4D4D?text=Orbit',
-  },
-];
+/**
+ * Ambil semua partner dari backend.
+ */
+export const getPartners = async (): Promise<Partner[]> => {
+  const res = await fetch(PARTNERS_API_URL);
 
-export const getPartners = (): Partner[] => {
-  try {
-    const partnersJson = localStorage.getItem(PARTNERS_STORAGE_KEY);
-    if (partnersJson) {
-      return JSON.parse(partnersJson);
-    } else {
-      localStorage.setItem(PARTNERS_STORAGE_KEY, JSON.stringify(initialPartners));
-      return initialPartners;
-    }
-  } catch (error) {
-    console.error('Failed to parse partners from localStorage', error);
-    return initialPartners;
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => null);
+    const msg = errJson?.error || `Gagal memuat partners (status ${res.status})`;
+    throw new Error(msg);
   }
+
+  const json = await res.json();
+  // backend: { data: PartnerDto[] }
+  return Array.isArray(json.data) ? (json.data as Partner[]) : [];
 };
 
-export const savePartners = (partners: Partner[]) => {
-  try {
-    localStorage.setItem(PARTNERS_STORAGE_KEY, JSON.stringify(partners));
-  } catch (error) {
-    console.error('Failed to save partners to localStorage', error);
+/**
+ * Tambah partner baru.
+ * Body:
+ *   { name: string; logoUrl: string }
+ */
+export const addPartner = async (partner: Omit<Partner, 'id'>): Promise<Partner> => {
+  const res = await fetch(PARTNERS_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(partner),
+  });
+
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => null);
+    const msg = errJson?.error || `Gagal membuat partner (status ${res.status})`;
+    throw new Error(msg);
   }
+
+  const json = await res.json();
+  return json.data as Partner;
 };
 
-export const addPartner = (partner: Omit<Partner, 'id'>): Partner => {
-  const partners = getPartners();
-  const newPartner: Partner = {
-    ...partner,
-    id: new Date().getTime().toString(),
-  };
-  const updatedPartners = [newPartner, ...partners];
-  savePartners(updatedPartners);
-  return newPartner;
+/**
+ * Update partner.
+ * Body:
+ *   { id: string; name: string; logoUrl: string }
+ */
+export const updatePartner = async (updatedPartner: Partner): Promise<Partner> => {
+  const res = await fetch(`${PARTNERS_API_URL}/${updatedPartner.id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: updatedPartner.name,
+      logoUrl: updatedPartner.logoUrl,
+    }),
+  });
+
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => null);
+    const msg = errJson?.error || `Gagal mengubah partner (status ${res.status})`;
+    throw new Error(msg);
+  }
+
+  const json = await res.json();
+  return json.data as Partner;
 };
 
-export const updatePartner = (updatedPartner: Partner): Partner => {
-  const partners = getPartners();
-  const updatedPartners = partners.map(partner =>
-    partner.id === updatedPartner.id ? updatedPartner : partner
-  );
-  savePartners(updatedPartners);
-  return updatedPartner;
-};
+/**
+ * Hapus partner.
+ */
+export const deletePartner = async (partnerId: string): Promise<void> => {
+  const res = await fetch(`${PARTNERS_API_URL}/${partnerId}`, {
+    method: 'DELETE',
+  });
 
-export const deletePartner = (partnerId: string) => {
-  const partners = getPartners();
-  const updatedPartners = partners.filter(partner => partner.id !== partnerId);
-  savePartners(updatedPartners);
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => null);
+    const msg = errJson?.error || `Gagal menghapus partner (status ${res.status})`;
+    throw new Error(msg);
+  }
+
+  // backend balikin { ok: true } → tidak perlu di-return
 };
