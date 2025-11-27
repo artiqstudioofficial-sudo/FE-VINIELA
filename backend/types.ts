@@ -29,5 +29,5 @@ export interface NewsArticleDto {
     en: string;
     cn: string;
   };
-  imageUrls: string[];
+  imageUrls: any;
 }

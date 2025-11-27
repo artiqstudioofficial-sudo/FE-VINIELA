@@ -10,7 +10,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { useTranslations } from "../../contexts/i18n";
 
 import ConfirmationModal from "../../components/ConfirmationModal";
-import ImageUploader from "../../components/ImageUploader";
 import NewsPreviewModal from "../../components/NewsPreviewModal";
 import RichTextEditor from "../../components/RichTextEditor";
 
@@ -24,9 +23,10 @@ import {
 } from "../../services/newsService";
 
 import { NewsArticle, NewsCategory, Language } from "../../types";
-import LangTabs from "./LangTabs";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+const ai = new GoogleGenAI({
+  apiKey: "AIzaSyB0BBG9LSqG_aIGzOD3Paka8psv-HqMczA",
+});
 
 const newsCategories: NewsCategory[] = [
   "company",
@@ -42,6 +42,17 @@ const emptyNewsArticle: NewsFormPayload = {
   category: "company",
 };
 
+// base URL backend untuk file gambar
+const IMAGE_BASE_URL = "http://localhost:4000";
+
+const resolveImageUrl = (url: string) => {
+  if (!url) return "";
+  // kalau sudah full URL, biarkan
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  // kalau relatif ("/uploads/..." atau "uploads/..."), prepend base URL
+  return `${IMAGE_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+};
+
 type ToastFn = (message: string, type?: "success" | "error") => void;
 
 interface NewsManagementViewProps {
@@ -52,8 +63,6 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
   showToast,
 }) => {
   const { t } = useTranslations();
-
-  const [activeLangTab, setActiveLangTab] = useState<Language>("id");
 
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [newsMeta, setNewsMeta] = useState<
@@ -76,6 +85,8 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [newsToDelete, setNewsToDelete] = useState<string | null>(null);
 
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+
   const validateField = useCallback(
     (name: string, value: string) => {
       let error = "";
@@ -96,7 +107,7 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
         setNewsMeta(res.meta);
         setNewsPage(res.meta.page);
       } catch (err) {
-        console.error("Failed to load news:", err);
+        console.error("Gagal memuat berita:", err);
         showToast(
           err instanceof Error
             ? err.message
@@ -140,35 +151,109 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
     [validateField]
   );
 
-  const processAndAddImages = useCallback((files: FileList) => {
-    for (const file of Array.from(files)) {
-      if (file && file.type.startsWith("image/")) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setNewsFormData((prev) => ({
-            ...prev,
-            imageUrls: [...prev.imageUrls, e.target?.result as string],
-          }));
-        };
-        reader.readAsDataURL(file);
+  /**
+   * Upload multiple gambar ke backend dan balikin array URL.
+   */
+  const uploadImagesToServer = useCallback(
+    async (files: FileList | File[]): Promise<string[]> => {
+      const fileArray: File[] = Array.isArray(files)
+        ? files
+        : Array.from(files as FileList);
+
+      if (fileArray.length === 0) return [];
+
+      const formData = new FormData();
+
+      for (const file of fileArray) {
+        if (file && file.type && file.type.startsWith("image/")) {
+          formData.append("files", file);
+        }
       }
-    }
-  }, []);
+
+      if (!formData.has("files")) {
+        showToast("File yang dipilih bukan gambar", "error");
+        return [];
+      }
+
+      try {
+        setIsUploadingImages(true);
+
+        const res = await fetch(
+          "http://localhost:4000/api/news/upload-images",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => null);
+          const msg =
+            errJson?.error || `Gagal upload gambar (status ${res.status})`;
+          throw new Error(msg);
+        }
+
+        const data = await res.json();
+        const urls: string[] = Array.isArray(data.urls)
+          ? data.urls
+          : Array.isArray(data.files)
+          ? data.files
+          : [];
+
+        if (!urls.length) {
+          showToast(
+            "Upload berhasil, tapi tidak ada URL gambar dikembalikan",
+            "error"
+          );
+        } else {
+          showToast("Gambar berhasil diunggah", "success");
+        }
+
+        return urls;
+      } catch (error) {
+        console.error("Upload gambar gagal:", error);
+        showToast("Gagal upload gambar", "error");
+        return [];
+      } finally {
+        setIsUploadingImages(false);
+      }
+    },
+    [showToast]
+  );
+
+  /**
+   * Proses file (drag/drop atau pilih), upload, lalu simpan URL ke imageUrls
+   */
+  const processAndAddImages = useCallback(
+    async (files: FileList | File[]) => {
+      const urls = await uploadImagesToServer(files);
+      if (!urls.length) return;
+
+      setNewsFormData((prev) => ({
+        ...prev,
+        imageUrls: [...prev.imageUrls, ...urls],
+      }));
+    },
+    [uploadImagesToServer]
+  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLLabelElement>) => {
       e.preventDefault();
       e.stopPropagation();
+      if (isUploadingImages) return;
       if (e.dataTransfer.files) {
         processAndAddImages(e.dataTransfer.files);
       }
     },
-    [processAndAddImages]
+    [processAndAddImages, isUploadingImages]
   );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isUploadingImages) return;
     if (e.target.files) {
       processAndAddImages(e.target.files);
+      e.target.value = ""; // reset supaya bisa pilih file yang sama lagi
     }
   };
 
@@ -186,8 +271,8 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
     try {
       const isHtml = field === "content";
       const prompt = isHtml
-        ? `Translate the text content within the following HTML from Indonesian to English and Chinese. Preserve the HTML structure and tags. Indonesian HTML: "${sourceText}" Provide the response in a valid JSON format with keys "en" for English and "cn" for Chinese.`
-        : `Translate the following Indonesian text to English and Chinese. Indonesian text: "${sourceText}" Provide the response in a valid JSON format with keys "en" for English and "cn" for Chinese.`;
+        ? `Terjemahkan konten teks di dalam HTML berikut dari Bahasa Indonesia ke Bahasa Inggris dan Bahasa Mandarin. Pertahankan struktur dan tag HTML apa adanya. HTML Indonesia: "${sourceText}". Berikan respons dalam format JSON yang valid dengan key "en" untuk Bahasa Inggris dan "cn" untuk Bahasa Mandarin.`
+        : `Terjemahkan teks Bahasa Indonesia berikut ke Bahasa Inggris dan Bahasa Mandarin. Teks Indonesia: "${sourceText}". Berikan respons dalam format JSON yang valid dengan key "en" untuk Bahasa Inggris dan "cn" untuk Bahasa Mandarin.`;
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -205,13 +290,13 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
         },
       });
 
-      // NOTE: tergantung bentuk response SDK-nya
+      // NOTE: sesuaikan dengan bentuk response SDK
       // const translatedText = JSON.parse(response.text());
       // handleNewsFormChange(`${field}.en`, translatedText.en);
       // handleNewsFormChange(`${field}.cn`, translatedText.cn);
     } catch (error) {
-      console.error("Translation failed:", error);
-      showToast("Failed to translate text", "error");
+      console.error("Gagal menerjemahkan:", error);
+      showToast("Gagal menerjemahkan teks", "error");
     } finally {
       setIsTranslating((prev) => ({ ...prev, [field]: false }));
     }
@@ -230,6 +315,11 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
     if (!newsFormData.title.id) errors.title = t.admin.validation.required;
     setNewsFormErrors(errors);
     if (Object.values(errors).some((e) => e)) return;
+
+    if (isUploadingImages) {
+      showToast("Tunggu sampai upload gambar selesai", "error");
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -252,7 +342,7 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
 
       resetNewsForm();
     } catch (err) {
-      console.error("Failed to save news:", err);
+      console.error("Gagal menyimpan berita:", err);
       showToast(
         err instanceof Error ? err.message : "Gagal menyimpan berita ke server",
         "error"
@@ -283,7 +373,7 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
       if (editingNews?.id === newsToDelete) resetNewsForm();
       showToast(t.admin.toast.newsDeleted);
     } catch (err) {
-      console.error("Failed to delete news:", err);
+      console.error("Gagal menghapus berita:", err);
       showToast(
         err instanceof Error ? err.message : "Gagal menghapus berita di server",
         "error"
@@ -317,12 +407,13 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 animate-fade-in-up">
+        {/* FORM BERITA */}
         <div className="lg:col-span-3 bg-white p-6 md:p-8 rounded-xl shadow-lg">
           <h2 className="text-2xl font-bold mb-6 text-viniela-dark border-b pb-4">
             {editingNews ? t.admin.editNews : t.admin.formTitle}
           </h2>
           <form onSubmit={handleNewsFormSubmit} className="space-y-6">
-            {/* Title */}
+            {/* Judul */}
             <section>
               <div className="flex justify-between items-center mb-1">
                 <h3 className="form-section-title">{t.admin.titleLabel}</h3>
@@ -344,53 +435,25 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
                   </span>
                 </button>
               </div>
-              <LangTabs
-                activeLang={activeLangTab}
-                onChange={setActiveLangTab}
-              />
-              <div className="space-y-4">
-                {activeLangTab === "id" && (
-                  <input
-                    type="text"
-                    placeholder={t.admin.titleIdPlaceholder}
-                    value={newsFormData.title.id}
-                    onChange={(e) =>
-                      handleNewsFormChange("title.id", e.target.value)
-                    }
-                    className={`form-input ${
-                      newsFormErrors.title ? "border-red-500" : ""
-                    }`}
-                  />
-                )}
-                {activeLangTab === "en" && (
-                  <input
-                    type="text"
-                    placeholder={t.admin.titleEnPlaceholder}
-                    value={newsFormData.title.en}
-                    onChange={(e) =>
-                      handleNewsFormChange("title.en", e.target.value)
-                    }
-                    className="form-input"
-                  />
-                )}
-                {activeLangTab === "cn" && (
-                  <input
-                    type="text"
-                    placeholder={t.admin.titleCnPlaceholder}
-                    value={newsFormData.title.cn}
-                    onChange={(e) =>
-                      handleNewsFormChange("title.cn", e.target.value)
-                    }
-                    className="form-input"
-                  />
-                )}
-                {newsFormErrors.title && activeLangTab === "id" && (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder={t.admin.titleIdPlaceholder}
+                  value={newsFormData.title.id}
+                  onChange={(e) =>
+                    handleNewsFormChange("title.id", e.target.value)
+                  }
+                  className={`form-input ${
+                    newsFormErrors.title ? "border-red-500" : ""
+                  }`}
+                />
+                {newsFormErrors.title && (
                   <p className="form-error">{newsFormErrors.title}</p>
                 )}
               </div>
             </section>
 
-            {/* Category */}
+            {/* Kategori */}
             <section>
               <h3 className="form-section-title">{t.admin.categoryLabel}</h3>
               <select
@@ -411,15 +474,15 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
               </select>
             </section>
 
-            {/* Images */}
+            {/* Gambar */}
             <section>
               <h3 className="form-section-title">{t.admin.imageLabel}</h3>
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 mb-4">
                 {newsFormData.imageUrls.map((url, index) => (
                   <div key={index} className="relative group aspect-square">
                     <img
-                      src={url}
-                      alt={`upload preview ${index}`}
+                      src={resolveImageUrl(url)}
+                      alt={`pratinjau upload ${index}`}
                       className="w-full h-full object-cover rounded-md shadow-sm"
                     />
                     <button
@@ -439,7 +502,11 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
               <label
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
-                className="relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors border-gray-300 bg-gray-50 hover:bg-gray-100"
+                className={`relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                  isUploadingImages
+                    ? "border-gray-300 bg-gray-100 cursor-not-allowed opacity-70"
+                    : "border-gray-300 bg-gray-50 hover:bg-gray-100"
+                }`}
               >
                 <div className="flex flex-col items-center justify-center text-center text-viniela-gray">
                   <i
@@ -448,9 +515,11 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
                   ></i>
                   <p className="text-sm">
                     <span className="font-semibold">
-                      {t.imageUploader.uploadCTA}
+                      {isUploadingImages
+                        ? t.imageUploader.uploading || "Mengunggah gambar..."
+                        : t.imageUploader.uploadCTA}
                     </span>{" "}
-                    {t.imageUploader.dragAndDrop}
+                    {!isUploadingImages && t.imageUploader.dragAndDrop}
                   </p>
                   <p className="text-xs">{t.imageUploader.fileTypes}</p>
                 </div>
@@ -460,11 +529,12 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
                   onChange={handleFileSelect}
                   accept="image/*"
                   className="hidden"
+                  disabled={isUploadingImages}
                 />
               </label>
             </section>
 
-            {/* Content */}
+            {/* Konten */}
             <section>
               <div className="flex justify-between items-center mb-1">
                 <h3 className="form-section-title">{t.admin.contentLabel}</h3>
@@ -486,39 +556,11 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
                   </span>
                 </button>
               </div>
-              <LangTabs
-                activeLang={activeLangTab}
-                onChange={setActiveLangTab}
+              <RichTextEditor
+                placeholder={t.admin.contentIdPlaceholder}
+                value={newsFormData.content.id}
+                onChange={(html) => handleNewsFormChange("content.id", html)}
               />
-              <div className="space-y-4">
-                {activeLangTab === "id" && (
-                  <RichTextEditor
-                    placeholder={t.admin.contentIdPlaceholder}
-                    value={newsFormData.content.id}
-                    onChange={(html) =>
-                      handleNewsFormChange("content.id", html)
-                    }
-                  />
-                )}
-                {activeLangTab === "en" && (
-                  <RichTextEditor
-                    placeholder={t.admin.contentEnPlaceholder}
-                    value={newsFormData.content.en}
-                    onChange={(html) =>
-                      handleNewsFormChange("content.en", html)
-                    }
-                  />
-                )}
-                {activeLangTab === "cn" && (
-                  <RichTextEditor
-                    placeholder={t.admin.contentCnPlaceholder}
-                    value={newsFormData.content.cn}
-                    onChange={(html) =>
-                      handleNewsFormChange("content.cn", html)
-                    }
-                  />
-                )}
-              </div>
             </section>
 
             <div className="flex justify-end items-center space-x-3 pt-4">
@@ -541,12 +583,14 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
               <button
                 type="submit"
                 className="btn-primary"
-                disabled={isSaving || !isNewsFormValid}
+                disabled={isSaving || !isNewsFormValid || isUploadingImages}
               >
-                {isSaving && (
+                {(isSaving || isUploadingImages) && (
                   <i className="fa-solid fa-spinner fa-spin w-5 h-5 mr-2" />
                 )}
-                {isSaving
+                {isUploadingImages
+                  ? "Menunggu upload gambar..."
+                  : isSaving
                   ? t.admin.savingButton
                   : editingNews
                   ? t.admin.updateButton
@@ -556,7 +600,7 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
           </form>
         </div>
 
-        {/* List news side */}
+        {/* DAFTAR BERITA / "Artikel saat ini" */}
         <div className="lg:col-span-2">
           <div className="bg-white p-6 rounded-xl shadow-lg sticky top-28">
             <h2 className="text-xl font-bold mb-4 text-viniela-dark border-b pb-3">
@@ -569,9 +613,10 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
                     key={article.id}
                     className="bg-viniela-silver/50 p-3 rounded-lg flex items-start space-x-4"
                   >
+                    {/* Gambar utama artikel */}
                     {article.imageUrls[0] && (
                       <img
-                        src={article.imageUrls[0]}
+                        src={resolveImageUrl(article.imageUrls[0])}
                         alt={article.title.en}
                         className="w-20 h-20 object-cover rounded-md flex-shrink-0"
                         loading="lazy"
@@ -583,8 +628,25 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
                       </span>
                       <h3 className="font-semibold text-viniela-dark line-clamp-2 mt-1 text-sm">
                         {article.title[t.langName.toLowerCase() as Language] ||
-                          article.title.en}
+                          article.title.en ||
+                          article.title.id}
                       </h3>
+
+                      {/* Tambahan: deretan gambar lain untuk artikel ini */}
+                      {article.imageUrls.length > 1 && (
+                        <div className="flex mt-2 space-x-2 overflow-x-auto pb-1">
+                          {article.imageUrls.slice(1, 4).map((url, idx) => (
+                            <img
+                              key={idx}
+                              src={resolveImageUrl(url)}
+                              alt={`gambar tambahan ${idx + 1}`}
+                              className="w-10 h-10 rounded object-cover flex-shrink-0 border border-white shadow-sm"
+                              loading="lazy"
+                            />
+                          ))}
+                        </div>
+                      )}
+
                       <div className="flex space-x-2 mt-2">
                         <button
                           onClick={() => handleEditNews(article)}
@@ -617,10 +679,10 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
                   onClick={() => loadNews(newsPage - 1)}
                   className="px-3 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  « Prev
+                  « Sebelumnya
                 </button>
                 <span>
-                  Page {newsMeta.page} / {newsMeta.totalPages}
+                  Halaman {newsMeta.page} / {newsMeta.totalPages}
                 </span>
                 <button
                   type="button"
@@ -628,7 +690,7 @@ const NewsManagementView: React.FC<NewsManagementViewProps> = ({
                   onClick={() => loadNews(newsPage + 1)}
                   className="px-3 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Next »
+                  Berikutnya »
                 </button>
               </div>
             )}

@@ -1,16 +1,73 @@
 import cors from "cors";
-import crypto from "crypto";
 import express, { Request, Response } from "express";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
+
 import { query } from "./lib/db";
 import { NewsArticleDto, NewsCategory, NewsRow } from "./types";
+import { generateId, parseImageUrlsString } from "./lib/helper";
 
 const app = express();
 const PORT = 4000;
 
+/* -------------------------------------------------------------------------- */
+/*                          KONFIGURASI UPLOAD MEDIA                          */
+/* -------------------------------------------------------------------------- */
+
+// Folder root untuk upload
+const UPLOAD_ROOT = path.join(__dirname, "..", "uploads");
+const NEWS_UPLOAD_DIR = path.join(UPLOAD_ROOT, "news");
+
+// Pastikan direktori upload ada
+if (!fs.existsSync(NEWS_UPLOAD_DIR)) {
+  fs.mkdirSync(NEWS_UPLOAD_DIR, { recursive: true });
+}
+
+// Konfigurasi storage untuk multer
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, NEWS_UPLOAD_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname); // .jpg, .png, dll
+    const base = path
+      .basename(file.originalname, ext)
+      .replace(/\s+/g, "-")
+      .toLowerCase();
+    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, `${unique}-${base}${ext}`);
+  },
+});
+
+// Hanya izinkan file gambar
+const fileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Hanya file gambar yang diperbolehkan"));
+  }
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // max 5MB per file
+  },
+});
+
+// Serve file statis dari folder uploads
+app.use("/uploads", express.static(UPLOAD_ROOT));
+
+/* -------------------------------------------------------------------------- */
+/*                                 MIDDLEWARE                                 */
+/* -------------------------------------------------------------------------- */
+
 app.use(cors());
 app.use(
   express.json({
-    limit: "20mb", // boleh dinaikkan lagi kalau masih kurang, misal '20mb'
+    limit: "20mb", // tetap, untuk payload JSON umum
   })
 );
 
@@ -35,14 +92,24 @@ const ALLOWED_CATEGORIES: NewsCategory[] = [
 function mapNewsRow(row: NewsRow): NewsArticleDto {
   let imageUrls: string[] = [];
 
-  if (row.image_urls) {
-    try {
-      const parsed = JSON.parse(row.image_urls);
-      if (Array.isArray(parsed)) {
-        imageUrls = parsed.filter((x) => typeof x === "string");
+  const raw = row.image_urls as any;
+
+  if (raw != null) {
+    // 1) Kalau sudah array (kolom JSON sudah di-parse driver)
+    if (Array.isArray(raw)) {
+      imageUrls = raw.filter((x) => typeof x === "string");
+    }
+    // 2) Kalau Buffer (misalnya kolom TEXT/BLOB)
+    else if (Buffer.isBuffer(raw)) {
+      const str = raw.toString("utf-8").trim();
+      imageUrls = parseImageUrlsString(str);
+    }
+    // 3) Kalau string (case paling umum)
+    else if (typeof raw === "string") {
+      const str = raw.trim();
+      if (str) {
+        imageUrls = parseImageUrlsString(str);
       }
-    } catch {
-      // kalau gagal parse, biarin kosong
     }
   }
 
@@ -66,9 +133,78 @@ function mapNewsRow(row: NewsRow): NewsArticleDto {
   };
 }
 
-function generateId(): string {
-  return crypto.randomUUID();
-}
+/* -------------------------------------------------------------------------- */
+/*                          ROUTES: UPLOAD MEDIA TERPISAH                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * POST /api/news/upload-image
+ * Upload 1 file gambar
+ * Form-data:
+ *   file: (file gambar)
+ *
+ * Response:
+ *   { url: "http://host/uploads/news/xxx.jpg" }
+ */
+app.post(
+  "/api/news/upload-image",
+  upload.single("file"),
+  (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res
+          .status(400)
+          .json({ error: "File gambar (field: file) wajib diunggah" });
+      }
+
+      const fileUrl = `${req.protocol}://${req.get("host")}/uploads/news/${
+        req.file.filename
+      }`;
+
+      return res.status(201).json({ url: fileUrl });
+    } catch (err: any) {
+      return res
+        .status(500)
+        .json({ error: err.message || "Gagal upload gambar" });
+    }
+  }
+);
+
+/**
+ * POST /api/news/upload-images
+ * Upload multiple gambar sekaligus
+ * Form-data:
+ *   files: (multiple file gambar)
+ *
+ * Response:
+ *   { urls: ["http://host/uploads/news/xxx1.jpg", ...] }
+ */
+app.post(
+  "/api/news/upload-images",
+  upload.array("files", 10),
+  (req: Request, res: Response) => {
+    try {
+      const files = req.files as Express.Multer.File[] | undefined;
+
+      if (!files || files.length === 0) {
+        return res.status(400).json({
+          error: "Minimal 1 file gambar (field: files) wajib diunggah",
+        });
+      }
+
+      const urls = files.map(
+        (f) => `${req.protocol}://${req.get("host")}/uploads/news/${f.filename}`
+      );
+
+      return res.status(201).json({ urls });
+    } catch (err: any) {
+      console.error(err);
+      return res
+        .status(500)
+        .json({ error: err.message || "Gagal upload gambar" });
+    }
+  }
+);
 
 /* -------------------------------------------------------------------------- */
 /*                                   ROUTES                                   */
@@ -191,6 +327,10 @@ app.get("/api/news/:id", async (req: Request, res: Response) => {
 /**
  * POST /api/news
  * Create berita baru
+ *
+ * Sekarang diasumsikan:
+ *  - imageUrls berisi array URL (hasil dari upload-image / upload-images)
+ *  - BUKAN lagi base64 dari frontend
  */
 app.post("/api/news", async (req: Request, res: Response) => {
   try {
