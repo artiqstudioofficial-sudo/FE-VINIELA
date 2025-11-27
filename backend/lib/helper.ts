@@ -1,5 +1,15 @@
+// src/lib/helper.ts
+import crypto from "crypto";
+
 /**
- * Helper buat parse string image_urls dari DB
+ * Generate ID berbasis UUID
+ */
+export function generateId(): string {
+  return crypto.randomUUID();
+}
+
+/**
+ * Helper buat parse string image_urls dari DB.
  * Support:
  *  - '["http://...","http://..."]'      (JSON array)
  *  - '"http://..."'                     (JSON string)
@@ -7,9 +17,13 @@
  *  - 'http://a.jpg,http://b.jpg'       (comma separated)
  */
 export function parseImageUrlsString(str: string): string[] {
+  if (!str) return [];
+
+  const trimmed = str.trim();
+
   // Coba parse sebagai JSON dulu
   try {
-    const parsed = JSON.parse(str);
+    const parsed = JSON.parse(trimmed);
 
     if (Array.isArray(parsed)) {
       return parsed.filter((x) => typeof x === "string");
@@ -19,16 +33,12 @@ export function parseImageUrlsString(str: string): string[] {
       return [parsed];
     }
   } catch {
-    // kalau gagal, jatuh ke fallback di bawah
+    // kalau gagal JSON.parse, kita fallback di bawah
   }
 
   // Fallback: anggap string biasa, bisa single URL atau comma-separated
-  return str
+  return trimmed
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-}
-
-export function generateId(): string {
-  return crypto.randomUUID();
 }

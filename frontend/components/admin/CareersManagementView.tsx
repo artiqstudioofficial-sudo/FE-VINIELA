@@ -7,9 +7,7 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 
 import * as careersService from "../../services/careersService";
 
-import { JobApplication, JobListing, JobType, Language } from "../../types";
-
-import LangTabs from "./LangTabs";
+import { JobApplication, JobListing, JobType } from "../../types";
 
 type ToastFn = (message: string, type?: "success" | "error") => void;
 
@@ -24,13 +22,14 @@ const jobTypes: JobType[] = [
   "Internship",
 ];
 
+// Hanya pakai bahasa Indonesia (id) saja
 const emptyJobListing: Omit<JobListing, "id" | "date"> = {
-  title: { id: "", en: "", cn: "" },
-  location: { id: "", en: "", cn: "" },
+  title: { id: "" },
+  location: { id: "" },
   type: "Full-time",
-  description: { id: "", en: "", cn: "" },
-  responsibilities: { id: "", en: "", cn: "" },
-  qualifications: { id: "", en: "", cn: "" },
+  description: { id: "" },
+  responsibilities: { id: "" },
+  qualifications: { id: "" },
 };
 
 type SortKey = "date" | "name";
@@ -41,7 +40,6 @@ const CareersManagementView: React.FC<CareersManagementViewProps> = ({
 }) => {
   const { t } = useTranslations();
 
-  const [activeLangTab, setActiveLangTab] = useState<Language>("id");
   const [activeCareersSubTab, setActiveCareersSubTab] = useState<
     "manage" | "view"
   >("manage");
@@ -67,9 +65,29 @@ const CareersManagementView: React.FC<CareersManagementViewProps> = ({
     direction: "desc",
   });
 
+  // helper untuk load data dari API
+  const loadJobsAndApplications = async () => {
+    try {
+      const [jobsData, appsData] = await Promise.all([
+        careersService.getJobListings(),
+        careersService.getApplications(),
+      ]);
+      setJobs(jobsData);
+      setApplications(appsData);
+    } catch (error) {
+      console.error("Gagal memuat data karir:", error);
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Gagal memuat data karir dari server",
+        "error"
+      );
+    }
+  };
+
   useEffect(() => {
-    setJobs(careersService.getJobListings());
-    setApplications(careersService.getApplications());
+    loadJobsAndApplications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resetJobForm = () => {
@@ -77,25 +95,37 @@ const CareersManagementView: React.FC<CareersManagementViewProps> = ({
     setJobFormData(emptyJobListing);
   };
 
-  const handleJobFormSubmit = (e: FormEvent) => {
+  const handleJobFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
 
-    setTimeout(() => {
+    try {
       if (editingJob) {
-        careersService.updateJobListing({
+        await careersService.updateJobListing({
           ...editingJob,
           ...jobFormData,
         });
         showToast(t.admin.toast.jobUpdated);
       } else {
-        careersService.addJobListing(jobFormData);
+        await careersService.addJobListing(jobFormData);
         showToast(t.admin.toast.jobCreated);
       }
-      setJobs(careersService.getJobListings());
+
+      // reload jobs dari API
+      const jobsData = await careersService.getJobListings();
+      setJobs(jobsData);
       resetJobForm();
+    } catch (error) {
+      console.error("Gagal menyimpan job:", error);
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Gagal menyimpan data lowongan ke server",
+        "error"
+      );
+    } finally {
       setIsSaving(false);
-    }, 500);
+    }
   };
 
   const handleEditJob = (job: JobListing) => {
@@ -111,13 +141,25 @@ const CareersManagementView: React.FC<CareersManagementViewProps> = ({
     window.scrollTo(0, 0);
   };
 
-  const confirmDeleteJob = () => {
-    if (jobToDelete) {
-      careersService.deleteJobListing(jobToDelete);
-      setJobs(careersService.getJobListings());
+  const confirmDeleteJob = async () => {
+    if (!jobToDelete) return;
+
+    try {
+      await careersService.deleteJobListing(jobToDelete);
+      const jobsData = await careersService.getJobListings();
+      setJobs(jobsData);
       if (editingJob?.id === jobToDelete) resetJobForm();
-      setJobToDelete(null);
       showToast(t.admin.toast.jobDeleted ?? "Job deleted");
+    } catch (error) {
+      console.error("Gagal menghapus job:", error);
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Gagal menghapus data lowongan di server",
+        "error"
+      );
+    } finally {
+      setJobToDelete(null);
     }
   };
 
@@ -180,112 +222,40 @@ const CareersManagementView: React.FC<CareersManagementViewProps> = ({
                 {editingJob ? t.admin.editJob : t.admin.formTitleJobs}
               </h2>
               <form onSubmit={handleJobFormSubmit} className="space-y-6">
-                {/* Job Title */}
+                {/* Job Title (ID saja) */}
                 <section>
                   <h3 className="form-section-title">{t.admin.jobTitle}</h3>
-                  <LangTabs
-                    activeLang={activeLangTab}
-                    onChange={setActiveLangTab}
+                  <input
+                    type="text"
+                    placeholder={t.admin.titleIdPlaceholder}
+                    value={jobFormData.title.id}
+                    onChange={(e) =>
+                      setJobFormData((p) => ({
+                        ...p,
+                        title: { id: e.target.value },
+                      }))
+                    }
+                    className="form-input"
+                    required
                   />
-                  {activeLangTab === "id" && (
-                    <input
-                      type="text"
-                      placeholder={t.admin.titleIdPlaceholder}
-                      value={jobFormData.title.id}
-                      onChange={(e) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          title: { ...p.title, id: e.target.value },
-                        }))
-                      }
-                      className="form-input"
-                      required
-                    />
-                  )}
-                  {activeLangTab === "en" && (
-                    <input
-                      type="text"
-                      placeholder={t.admin.titleEnPlaceholder}
-                      value={jobFormData.title.en}
-                      onChange={(e) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          title: { ...p.title, en: e.target.value },
-                        }))
-                      }
-                      className="form-input"
-                      required
-                    />
-                  )}
-                  {activeLangTab === "cn" && (
-                    <input
-                      type="text"
-                      placeholder={t.admin.titleCnPlaceholder}
-                      value={jobFormData.title.cn}
-                      onChange={(e) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          title: { ...p.title, cn: e.target.value },
-                        }))
-                      }
-                      className="form-input"
-                      required
-                    />
-                  )}
                 </section>
 
-                {/* Location */}
+                {/* Location (ID saja) */}
                 <section>
                   <h3 className="form-section-title">{t.admin.location}</h3>
-                  <LangTabs
-                    activeLang={activeLangTab}
-                    onChange={setActiveLangTab}
+                  <input
+                    type="text"
+                    placeholder={t.admin.locationIdPlaceholder}
+                    value={jobFormData.location.id}
+                    onChange={(e) =>
+                      setJobFormData((p) => ({
+                        ...p,
+                        location: { id: e.target.value },
+                      }))
+                    }
+                    className="form-input"
+                    required
                   />
-                  {activeLangTab === "id" && (
-                    <input
-                      type="text"
-                      placeholder={t.admin.locationIdPlaceholder}
-                      value={jobFormData.location.id}
-                      onChange={(e) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          location: { ...p.location, id: e.target.value },
-                        }))
-                      }
-                      className="form-input"
-                      required
-                    />
-                  )}
-                  {activeLangTab === "en" && (
-                    <input
-                      type="text"
-                      placeholder={t.admin.locationEnPlaceholder}
-                      value={jobFormData.location.en}
-                      onChange={(e) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          location: { ...p.location, en: e.target.value },
-                        }))
-                      }
-                      className="form-input"
-                      required
-                    />
-                  )}
-                  {activeLangTab === "cn" && (
-                    <input
-                      type="text"
-                      placeholder={t.admin.locationCnPlaceholder}
-                      value={jobFormData.location.cn}
-                      onChange={(e) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          location: { ...p.location, cn: e.target.value },
-                        }))
-                      }
-                      className="form-input"
-                      required
-                    />
-                  )}
                 </section>
 
                 {/* Job Type */}
@@ -309,170 +279,59 @@ const CareersManagementView: React.FC<CareersManagementViewProps> = ({
                   </select>
                 </section>
 
-                {/* Description */}
+                {/* Description (ID saja) */}
                 <section>
                   <h3 className="form-section-title">{t.admin.description}</h3>
-                  <LangTabs
-                    activeLang={activeLangTab}
-                    onChange={setActiveLangTab}
+                  <RichTextEditor
+                    placeholder={t.admin.descriptionIdPlaceholder}
+                    value={jobFormData.description.id}
+                    onChange={(val) =>
+                      setJobFormData((p) => ({
+                        ...p,
+                        description: {
+                          id: val,
+                        },
+                      }))
+                    }
                   />
-                  {activeLangTab === "id" && (
-                    <RichTextEditor
-                      placeholder={t.admin.descriptionIdPlaceholder}
-                      value={jobFormData.description.id}
-                      onChange={(val) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          description: {
-                            ...p.description,
-                            id: val,
-                          },
-                        }))
-                      }
-                    />
-                  )}
-                  {activeLangTab === "en" && (
-                    <RichTextEditor
-                      placeholder={t.admin.descriptionEnPlaceholder}
-                      value={jobFormData.description.en}
-                      onChange={(val) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          description: {
-                            ...p.description,
-                            en: val,
-                          },
-                        }))
-                      }
-                    />
-                  )}
-                  {activeLangTab === "cn" && (
-                    <RichTextEditor
-                      placeholder={t.admin.descriptionCnPlaceholder}
-                      value={jobFormData.description.cn}
-                      onChange={(val) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          description: {
-                            ...p.description,
-                            cn: val,
-                          },
-                        }))
-                      }
-                    />
-                  )}
                 </section>
 
-                {/* Responsibilities */}
+                {/* Responsibilities (ID saja) */}
                 <section>
                   <h3 className="form-section-title">
                     {t.admin.responsibilities}
                   </h3>
-                  <LangTabs
-                    activeLang={activeLangTab}
-                    onChange={setActiveLangTab}
+                  <RichTextEditor
+                    placeholder={t.admin.responsibilitiesIdPlaceholder}
+                    value={jobFormData.responsibilities.id}
+                    onChange={(val) =>
+                      setJobFormData((p) => ({
+                        ...p,
+                        responsibilities: {
+                          id: val,
+                        },
+                      }))
+                    }
                   />
-                  {activeLangTab === "id" && (
-                    <RichTextEditor
-                      placeholder={t.admin.responsibilitiesIdPlaceholder}
-                      value={jobFormData.responsibilities.id}
-                      onChange={(val) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          responsibilities: {
-                            ...p.responsibilities,
-                            id: val,
-                          },
-                        }))
-                      }
-                    />
-                  )}
-                  {activeLangTab === "en" && (
-                    <RichTextEditor
-                      placeholder={t.admin.responsibilitiesEnPlaceholder}
-                      value={jobFormData.responsibilities.en}
-                      onChange={(val) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          responsibilities: {
-                            ...p.responsibilities,
-                            en: val,
-                          },
-                        }))
-                      }
-                    />
-                  )}
-                  {activeLangTab === "cn" && (
-                    <RichTextEditor
-                      placeholder={t.admin.responsibilitiesCnPlaceholder}
-                      value={jobFormData.responsibilities.cn}
-                      onChange={(val) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          responsibilities: {
-                            ...p.responsibilities,
-                            cn: val,
-                          },
-                        }))
-                      }
-                    />
-                  )}
                 </section>
 
-                {/* Qualifications */}
+                {/* Qualifications (ID saja) */}
                 <section>
                   <h3 className="form-section-title">
                     {t.admin.qualifications}
                   </h3>
-                  <LangTabs
-                    activeLang={activeLangTab}
-                    onChange={setActiveLangTab}
+                  <RichTextEditor
+                    placeholder={t.admin.qualificationsIdPlaceholder}
+                    value={jobFormData.qualifications.id}
+                    onChange={(val) =>
+                      setJobFormData((p) => ({
+                        ...p,
+                        qualifications: {
+                          id: val,
+                        },
+                      }))
+                    }
                   />
-                  {activeLangTab === "id" && (
-                    <RichTextEditor
-                      placeholder={t.admin.qualificationsIdPlaceholder}
-                      value={jobFormData.qualifications.id}
-                      onChange={(val) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          qualifications: {
-                            ...p.qualifications,
-                            id: val,
-                          },
-                        }))
-                      }
-                    />
-                  )}
-                  {activeLangTab === "en" && (
-                    <RichTextEditor
-                      placeholder={t.admin.qualificationsEnPlaceholder}
-                      value={jobFormData.qualifications.en}
-                      onChange={(val) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          qualifications: {
-                            ...p.qualifications,
-                            en: val,
-                          },
-                        }))
-                      }
-                    />
-                  )}
-                  {activeLangTab === "cn" && (
-                    <RichTextEditor
-                      placeholder={t.admin.qualificationsCnPlaceholder}
-                      value={jobFormData.qualifications.cn}
-                      onChange={(val) =>
-                        setJobFormData((p) => ({
-                          ...p,
-                          qualifications: {
-                            ...p.qualifications,
-                            cn: val,
-                          },
-                        }))
-                      }
-                    />
-                  )}
                 </section>
 
                 <div className="flex justify-end items-center space-x-3">
@@ -517,11 +376,10 @@ const CareersManagementView: React.FC<CareersManagementViewProps> = ({
                         className="bg-viniela-silver/50 p-4 rounded-lg"
                       >
                         <h3 className="font-semibold text-viniela-dark">
-                          {job.title[t.langName.toLowerCase() as Language] ||
-                            job.title.en}
+                          {job.title.id}
                         </h3>
                         <p className="text-sm text-viniela-gray mt-1">
-                          {t.admin.jobTypes[job.type]} &bull; {job.location.en}
+                          {t.admin.jobTypes[job.type]} &bull; {job.location.id}
                         </p>
                         <div className="flex justify-end space-x-2 mt-3">
                           <button
@@ -562,7 +420,7 @@ const CareersManagementView: React.FC<CareersManagementViewProps> = ({
                   <option value="all">{t.admin.allJobs}</option>
                   {jobs.map((job) => (
                     <option key={job.id} value={job.id}>
-                      {job.title.en}
+                      {job.title.id}
                     </option>
                   ))}
                 </select>

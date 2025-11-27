@@ -1,25 +1,49 @@
-// types.ts
+/* -------------------------------------------------------------------------- */
+/*                                  COMMON                                    */
+/* -------------------------------------------------------------------------- */
 
+export type Language = "id" | "en" | "cn";
 export type NewsCategory = "company" | "division" | "industry" | "press";
 export type JobType = "Full-time" | "Part-time" | "Contract" | "Internship";
 
-// --- NEWS ---
+/* -------------------------------------------------------------------------- */
+/*                                    NEWS                                    */
+/* -------------------------------------------------------------------------- */
 
 export interface NewsArticle {
   id: string;
-  title: string; // dulu { id, en, cn }
-  content: string; // dulu { id, en, cn }
+  // multi-bahasa (id / en / cn)
+  title: {
+    id: string;
+    en: string;
+    cn: string;
+  };
+  content: {
+    id: string;
+    en: string;
+    cn: string;
+  };
   imageUrls: string[];
   category: NewsCategory;
-  createdAt: string; // optional, terserah kamu
-  updatedAt?: string;
+  // sesuai DTO backend: field "date"
+  date: string | null;
 }
 
 export interface NewsFormPayload {
-  title: string;
-  content: string;
+  title: {
+    id: string;
+    en?: string;
+    cn?: string;
+  };
+  content: {
+    id: string;
+    en?: string;
+    cn?: string;
+  };
   imageUrls: string[];
   category: NewsCategory;
+  // opsional kalau mau kirim tanggal publish dari FE
+  date?: string | null;
 }
 
 export interface PaginatedNewsResponse {
@@ -32,44 +56,62 @@ export interface PaginatedNewsResponse {
   };
 }
 
-// --- CAREERS ---
+/* -------------------------------------------------------------------------- */
+/*                                   CAREERS                                  */
+/* -------------------------------------------------------------------------- */
 
 export interface JobListing {
   id: string;
-  title: string; // 1 bahasa
-  location: string; // 1 bahasa
+  // hanya pakai bahasa Indonesia (id) saja
+  title: {
+    id: string;
+  };
+  location: {
+    id: string;
+  };
   type: JobType;
-  description: string; // HTML string
-  responsibilities: string; // HTML string
-  qualifications: string; // HTML string
-  date: string; // tanggal posting
+  description: {
+    id: string; // HTML string
+  };
+  responsibilities: {
+    id: string; // HTML string
+  };
+  qualifications: {
+    id: string; // HTML string
+  };
+  // tanggal posting (ISO string dari backend)
+  date: string | null;
 }
 
 export interface JobApplication {
   id: string;
   jobId: string;
   jobTitle: string;
-  name: string;
+  name: string; // <== tambahkan name (sesuai backend)
   email: string;
   phone: string;
-  resume: string;
-  resumeFileName: string;
-  coverLetter?: string;
-  date: string;
+  resume: string; // resume_url di DB
+  resumeFileName: string; // resume_filename di DB
+  coverLetter: string | null; // bukan optional, tapi bisa null
+  date: string; // ISO string applied_at
 }
 
-// --- TEAM ---
+/* -------------------------------------------------------------------------- */
+/*                                    TEAM                                    */
+/* -------------------------------------------------------------------------- */
 
 export interface TeamMember {
   id: string;
   name: string;
-  title: string; // 1 bahasa
+  title: string; // 1 bahasa (public site)
   bio: string; // 1 bahasa
   imageUrl: string;
   linkedinUrl?: string;
 }
 
-// --- PARTNER ---
+/* -------------------------------------------------------------------------- */
+/*                                   PARTNER                                  */
+/* -------------------------------------------------------------------------- */
 
 export interface Partner {
   id: string;
@@ -77,7 +119,9 @@ export interface Partner {
   logoUrl: string;
 }
 
-// --- CONTACT ---
+/* -------------------------------------------------------------------------- */
+/*                                   CONTACT                                  */
+/* -------------------------------------------------------------------------- */
 
 export interface ContactMessage {
   id: string;

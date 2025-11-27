@@ -38,43 +38,68 @@ const DashboardView: React.FC = () => {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
 
   useEffect(() => {
-    // News
-    (async () => {
+    const loadDashboardData = async () => {
       try {
-        // Ambil 1 page besar supaya cukup untuk statistik
-        const res: PaginatedNewsResponse = await listNews(1, 200);
-        const data = res.data;
+        // === News ===
+        try {
+          const res: PaginatedNewsResponse = await listNews(1, 200);
+          const data = res.data;
 
-        const byCat: PieChartItem[] = newsCategories
-          .map((cat) => ({
-            label: t.admin.categories[cat],
-            value: data.filter((n) => n.category === cat).length,
-            color:
-              cat === "company"
-                ? "#c09a58"
-                : cat === "division"
-                ? "#374151"
-                : cat === "industry"
-                ? "#6b7280"
-                : "#9ca3af",
-          }))
-          .filter((d) => d.value > 0);
+          const byCat: PieChartItem[] = newsCategories
+            .map((cat) => ({
+              label: t.admin.categories[cat],
+              value: data.filter((n) => n.category === cat).length,
+              color:
+                cat === "company"
+                  ? "#c09a58"
+                  : cat === "division"
+                  ? "#374151"
+                  : cat === "industry"
+                  ? "#6b7280"
+                  : "#9ca3af",
+            }))
+            .filter((d) => d.value > 0);
 
-        setNewsCountByCategory(byCat);
+          setNewsCountByCategory(byCat);
+        } catch (e) {
+          console.error("Failed to load dashboard news stats", e);
+        }
+
+        // === Careers (Jobs + Applications) ===
+        try {
+          const [jobsData, appsData] = await Promise.all([
+            careersService.getJobListings(),
+            careersService.getApplications(),
+          ]);
+          setJobs(jobsData);
+          setApplications(appsData);
+        } catch (e) {
+          console.error("Failed to load careers data", e);
+        }
+
+        // === Contact Messages ===
+        try {
+          const messages = await contactService.getContactMessages();
+          setContactMessages(messages);
+        } catch (e) {
+          console.error("Failed to load contact messages", e);
+        }
+
+        // === Team Members ===
+        try {
+          const members = await teamService.getTeamMembers();
+          setTeamMembers(members);
+        } catch (e) {
+          console.error("Failed to load team members", e);
+        }
       } catch (e) {
-        console.error("Failed to load dashboard news stats", e);
+        // catch-all kalau ada error tak terduga
+        console.error("Failed to load dashboard data", e);
       }
-    })();
+    };
 
-    // Careers
-    setJobs(careersService.getJobListings());
-    setApplications(careersService.getApplications());
-
-    // Contact
-    setContactMessages(contactService.getContactMessages());
-
-    // Team
-    setTeamMembers(teamService.getTeamMembers());
+    loadDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);
 
   const applicationsByJob: BarChartItem[] = jobs
