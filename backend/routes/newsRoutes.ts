@@ -1,35 +1,73 @@
-// src/routes/newsRoutes.ts
-import { Router, Request, Response } from "express";
-import { query } from "../lib/db";
-import { NewsArticleDto, NewsCategory, NewsRow } from "../types";
-import { generateId, parseImageUrlsString } from "../lib/helper";
+import { Request, Response, Router } from 'express';
+import { query } from '../lib/db';
+import { generateId, parseImageUrlsString } from '../lib/helper';
+import { NewsArticleDto, NewsCategory, NewsRow } from '../types';
+
+// ====== TAMBAHAN UNTUK UPLOAD GAMBAR ======
+import fs from 'fs';
+import multer from 'multer';
+import path from 'path';
 
 const router = Router();
 
-const ALLOWED_CATEGORIES: NewsCategory[] = [
-  "company",
-  "division",
-  "industry",
-  "press",
-];
+const ALLOWED_CATEGORIES: NewsCategory[] = ['company', 'division', 'industry', 'press'];
 
+// ====== CONFIG UPLOAD GAMBAR NEWS ======
+const UPLOAD_BASE_DIR = path.join(__dirname, '..', 'uploads'); // ../uploads
+const NEWS_UPLOAD_DIR = path.join(UPLOAD_BASE_DIR, 'news'); // ../uploads/news
+
+// Pastikan folder ada
+if (!fs.existsSync(NEWS_UPLOAD_DIR)) {
+  fs.mkdirSync(NEWS_UPLOAD_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (__, _, cb) => {
+    cb(null, NEWS_UPLOAD_DIR);
+  },
+  filename: (_, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path
+      .basename(file.originalname, ext)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `${base || 'image'}-${unique}${ext}`);
+  },
+});
+
+const fileFilter: multer.Options['fileFilter'] = (req, file, cb) => {
+  if (file.mimetype && file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('File harus berupa gambar (image/*)'));
+  }
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 10,
+  },
+});
+
+// ====== MAPPER NEWS (VERSI LAMA, MULTI BAHASA) ======
 function mapNewsRow(row: NewsRow): NewsArticleDto {
   let imageUrls: string[] = [];
 
   const raw = row.image_urls as any;
 
   if (raw != null) {
-    // 1) Kalau sudah array (kolom JSON sudah di-parse driver)
     if (Array.isArray(raw)) {
-      imageUrls = raw.filter((x) => typeof x === "string");
-    }
-    // 2) Kalau Buffer (misalnya kolom TEXT/BLOB)
-    else if (Buffer.isBuffer(raw)) {
-      const str = raw.toString("utf-8").trim();
+      imageUrls = raw.filter((x) => typeof x === 'string');
+    } else if (Buffer.isBuffer(raw)) {
+      const str = raw.toString('utf-8').trim();
       imageUrls = parseImageUrlsString(str);
-    }
-    // 3) Kalau string (case paling umum)
-    else if (typeof raw === "string") {
+    } else if (typeof raw === 'string') {
       const str = raw.trim();
       if (str) {
         imageUrls = parseImageUrlsString(str);
@@ -45,17 +83,44 @@ function mapNewsRow(row: NewsRow): NewsArticleDto {
     category: row.category,
     title: {
       id: row.title_id,
-      en: row.title_en ?? "",
-      cn: row.title_cn ?? "",
+      en: row.title_en ?? '',
+      cn: row.title_cn ?? '',
     },
     content: {
       id: row.content_id,
-      en: row.content_en ?? "",
-      cn: row.content_cn ?? "",
+      en: row.content_en ?? '',
+      cn: row.content_cn ?? '',
     },
     imageUrls,
   };
 }
+
+/**
+ * POST /api/news/upload-images
+ * Upload multiple image file untuk berita.
+ * Field form-data: files (multiple)
+ *
+ * Response:
+ *  { urls: string[] }
+ *  Contoh: { "urls": ["/uploads/news/image-123.png", ...] }
+ */
+router.post('/upload-images', upload.array('files', 10), (req: Request, res: Response) => {
+  try {
+    const files = (req.files as Express.Multer.File[]) || [];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'Tidak ada file yang di-upload' });
+    }
+
+    // URL relatif untuk dipakai FE
+    const urls = files.map((file) => `/uploads/news/${file.filename}`);
+
+    return res.json({ urls });
+  } catch (err: any) {
+    console.error('Upload images error:', err);
+    return res.status(500).json({ error: err.message || 'Gagal upload gambar' });
+  }
+});
 
 /**
  * GET /api/news
@@ -63,11 +128,11 @@ function mapNewsRow(row: NewsRow): NewsArticleDto {
  * Query:
  *   ?page=1&limit=10
  */
-router.get("/", async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     // --- pagination params ---
-    const rawPage = req.query.page?.toString() ?? "1";
-    const rawLimit = req.query.limit?.toString() ?? "10";
+    const rawPage = req.query.page?.toString() ?? '1';
+    const rawLimit = req.query.limit?.toString() ?? '10';
 
     let page = parseInt(rawPage, 10);
     let limit = parseInt(rawLimit, 10);
@@ -83,9 +148,7 @@ router.get("/", async (req: Request, res: Response) => {
       total: number;
     }
 
-    const countRows = await query<CountRow>(
-      "SELECT COUNT(*) AS total FROM news"
-    );
+    const countRows = await query<CountRow>('SELECT COUNT(*) AS total FROM news');
     const countRow = countRows[0];
     const total = countRow ? Number(countRow.total) : 0;
     const totalPages = total > 0 ? Math.ceil(total / limit) : 1;
@@ -110,7 +173,7 @@ router.get("/", async (req: Request, res: Response) => {
       ORDER BY COALESCE(published_at, created_at) DESC
       LIMIT ? OFFSET ?
       `,
-      [limit, offset]
+      [limit, offset],
     );
 
     const data = rows.map(mapNewsRow);
@@ -126,7 +189,7 @@ router.get("/", async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || "DB error" });
+    res.status(500).json({ error: err.message || 'DB error' });
   }
 });
 
@@ -134,7 +197,7 @@ router.get("/", async (req: Request, res: Response) => {
  * GET /api/news/:id
  * Ambil detail 1 news
  */
-router.get("/:id", async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const rows = await query<NewsRow>(
@@ -156,18 +219,18 @@ router.get("/:id", async (req: Request, res: Response) => {
       WHERE id = ?
       LIMIT 1
       `,
-      [id]
+      [id],
     );
 
     const row = rows[0];
     if (!row) {
-      return res.status(404).json({ error: "News not found" });
+      return res.status(404).json({ error: 'News not found' });
     }
 
     res.json({ data: mapNewsRow(row) });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || "DB error" });
+    res.status(500).json({ error: err.message || 'DB error' });
   }
 });
 
@@ -179,24 +242,22 @@ router.get("/:id", async (req: Request, res: Response) => {
  *  - imageUrls berisi array URL (hasil dari upload-image / upload-images)
  *  - BUKAN lagi base64 dari frontend
  */
-router.post("/", async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const { title, content, category, imageUrls, date } = req.body || {};
 
     if (!title?.id || !content?.id || !category) {
-      return res
-        .status(400)
-        .json({ error: "title.id, content.id, dan category wajib diisi" });
+      return res.status(400).json({ error: 'title.id, content.id, dan category wajib diisi' });
     }
 
     if (!ALLOWED_CATEGORIES.includes(category)) {
-      return res.status(400).json({ error: "Invalid category" });
+      return res.status(400).json({ error: 'Invalid category' });
     }
 
     const id = generateId();
     const publishedAt = date ? new Date(date) : new Date();
     const images = Array.isArray(imageUrls)
-      ? imageUrls.filter((x: any) => typeof x === "string")
+      ? imageUrls.filter((x: any) => typeof x === 'string')
       : [];
 
     await query(
@@ -214,15 +275,15 @@ router.post("/", async (req: Request, res: Response) => {
       [
         id,
         title.id,
-        title.en ?? "",
-        title.cn ?? "",
+        title.en ?? '',
+        title.cn ?? '',
         content.id,
-        content.en ?? "",
-        content.cn ?? "",
+        content.en ?? '',
+        content.cn ?? '',
         category,
         JSON.stringify(images),
         publishedAt,
-      ]
+      ],
     );
 
     const dto: NewsArticleDto = {
@@ -231,13 +292,13 @@ router.post("/", async (req: Request, res: Response) => {
       category,
       title: {
         id: title.id,
-        en: title.en ?? "",
-        cn: title.cn ?? "",
+        en: title.en ?? '',
+        cn: title.cn ?? '',
       },
       content: {
         id: content.id,
-        en: content.en ?? "",
-        cn: content.cn ?? "",
+        en: content.en ?? '',
+        cn: content.cn ?? '',
       },
       imageUrls: images,
     };
@@ -245,7 +306,7 @@ router.post("/", async (req: Request, res: Response) => {
     res.status(201).json({ data: dto });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || "DB error" });
+    res.status(500).json({ error: err.message || 'DB error' });
   }
 });
 
@@ -253,33 +314,31 @@ router.post("/", async (req: Request, res: Response) => {
  * PUT /api/news/:id
  * Update berita
  */
-router.put("/:id", async (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { title, content, category, imageUrls, date } = req.body || {};
 
     if (!title?.id || !content?.id || !category) {
-      return res
-        .status(400)
-        .json({ error: "title.id, content.id, dan category wajib diisi" });
+      return res.status(400).json({ error: 'title.id, content.id, dan category wajib diisi' });
     }
 
     if (!ALLOWED_CATEGORIES.includes(category)) {
-      return res.status(400).json({ error: "Invalid category" });
+      return res.status(400).json({ error: 'Invalid category' });
     }
 
     const publishedAt = date ? new Date(date) : null;
     const images = Array.isArray(imageUrls)
-      ? imageUrls.filter((x: any) => typeof x === "string")
+      ? imageUrls.filter((x: any) => typeof x === 'string')
       : [];
 
     const params: any[] = [
       title.id,
-      title.en ?? "",
-      title.cn ?? "",
+      title.en ?? '',
+      title.cn ?? '',
       content.id,
-      content.en ?? "",
-      content.cn ?? "",
+      content.en ?? '',
+      content.cn ?? '',
       category,
       JSON.stringify(images),
     ];
@@ -326,18 +385,18 @@ router.put("/:id", async (req: Request, res: Response) => {
       WHERE id = ?
       LIMIT 1
       `,
-      [id]
+      [id],
     );
 
     const row = rows[0];
     if (!row) {
-      return res.status(404).json({ error: "News not found" });
+      return res.status(404).json({ error: 'News not found' });
     }
 
     res.json({ data: mapNewsRow(row) });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || "DB error" });
+    res.status(500).json({ error: err.message || 'DB error' });
   }
 });
 
@@ -345,26 +404,23 @@ router.put("/:id", async (req: Request, res: Response) => {
  * DELETE /api/news/:id
  * Hapus berita
  */
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    await query<any>("DELETE FROM news WHERE id = ?", [id]);
+    await query<any>('DELETE FROM news WHERE id = ?', [id]);
 
     // cek lagi apakah masih ada
-    const rows = await query<NewsRow>(
-      "SELECT id FROM news WHERE id = ? LIMIT 1",
-      [id]
-    );
+    const rows = await query<NewsRow>('SELECT id FROM news WHERE id = ? LIMIT 1', [id]);
     const row = rows[0];
     if (row) {
-      return res.status(500).json({ error: "Failed to delete news" });
+      return res.status(500).json({ error: 'Failed to delete news' });
     }
 
     res.json({ ok: true });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ error: err.message || "DB error" });
+    res.status(500).json({ error: err.message || 'DB error' });
   }
 });
 

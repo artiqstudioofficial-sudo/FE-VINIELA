@@ -1,78 +1,73 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useTranslations } from "../contexts/i18n";
+import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslations } from '../contexts/i18n';
 
-import Toast from "../components/Toast";
-import DashboardView from "@/components/admin/DashboardManagementView";
-import NewsManagementView from "@/components/admin/NewsManagementView";
-import CareersManagementView from "@/components/admin/CareersManagementView";
-import TeamManagementView from "@/components/admin/TeamManagementView";
-import PartnerManagementView from "@/components/admin/PartnerManagementView";
-import ContactManagementView from "@/components/admin/ContactManagementView";
+import CareersManagementView from '@/components/admin/CareersManagementView';
+import ContactManagementView from '@/components/admin/ContactManagementView';
+import DashboardView from '@/components/admin/DashboardManagementView';
+import NewsManagementView from '@/components/admin/NewsManagementView';
+import PartnerManagementView from '@/components/admin/PartnerManagementView';
+import TeamManagementView from '@/components/admin/TeamManagementView';
+import Toast from '../components/Toast';
 
-type View = "dashboard" | "news" | "careers" | "team" | "partners" | "contact";
-type ToastState = { show: boolean; message: string; type: "success" | "error" };
+type View = 'dashboard' | 'news' | 'careers' | 'team' | 'partners' | 'contact';
+type ToastState = { show: boolean; message: string; type: 'success' | 'error' };
 
 const AdminPage: React.FC = () => {
   const { t } = useTranslations();
   const navigate = useNavigate();
 
-  const [activeView, setActiveView] = useState<View>("dashboard");
+  const [activeView, setActiveView] = useState<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>({
     show: false,
-    message: "",
-    type: "success",
+    message: '',
+    type: 'success',
   });
 
-  const showToast = (
-    message: string,
-    type: "success" | "error" = "success"
-  ) => {
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ show: true, message, type });
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem("viniela-auth");
-    navigate("/login");
+    sessionStorage.removeItem('viniela-auth');
+    navigate('/login');
   };
 
   const navItems = useMemo(
     () => [
       {
-        id: "dashboard",
+        id: 'dashboard',
         label: t.admin.dashboardTitle,
-        icon: "fa-solid fa-chart-pie",
+        icon: 'fa-solid fa-chart-pie',
       },
       {
-        id: "news",
+        id: 'news',
         label: t.admin.newsManagement,
-        icon: "fa-solid fa-newspaper",
+        icon: 'fa-solid fa-newspaper',
       },
       {
-        id: "careers",
+        id: 'careers',
         label: t.admin.careersManagement,
-        icon: "fa-solid fa-briefcase",
+        icon: 'fa-solid fa-briefcase',
       },
-      { id: "team", label: t.admin.teamManagement, icon: "fa-solid fa-users" },
+      { id: 'team', label: t.admin.teamManagement, icon: 'fa-solid fa-users' },
       {
-        id: "partners",
+        id: 'partners',
         label: t.admin.partnerManagement,
-        icon: "fa-solid fa-handshake",
+        icon: 'fa-solid fa-handshake',
       },
       {
-        id: "contact",
+        id: 'contact',
         label: t.admin.contactManagement,
-        icon: "fa-solid fa-envelope",
+        icon: 'fa-solid fa-envelope',
       },
     ],
-    [t]
+    [t],
   );
 
   const pageTitle = useMemo(() => {
-    return (
-      navItems.find((item) => item.id === activeView)?.label || "Admin Panel"
-    );
+    return navItems.find((item) => item.id === activeView)?.label || 'Admin Panel';
   }, [activeView, navItems]);
 
   return (
@@ -87,13 +82,11 @@ const AdminPage: React.FC = () => {
       {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 bg-viniela-dark text-white transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 shadow-2xl ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex items-center justify-center h-20 border-b border-gray-700 bg-black/20">
-          <h1 className="text-2xl font-bold tracking-wider text-viniela-gold">
-            ADMIN PANEL
-          </h1>
+          <h1 className="text-2xl font-bold tracking-wider text-viniela-gold">ADMIN PANEL</h1>
         </div>
         <nav className="p-4 space-y-2 mt-4">
           {navItems.map((item) => (
@@ -105,8 +98,8 @@ const AdminPage: React.FC = () => {
               }}
               className={`w-full flex items-center px-4 py-3 rounded-lg transition-all duration-200 group ${
                 activeView === item.id
-                  ? "bg-viniela-gold text-white shadow-lg"
-                  : "text-gray-400 hover:bg.white/10 hover:text-white"
+                  ? 'bg-viniela-gold text-white shadow-lg'
+                  : 'text-gray-400 hover:bg.white/10 hover:text-white'
               }`}
             >
               <i
@@ -137,14 +130,10 @@ const AdminPage: React.FC = () => {
             >
               <i className="fa-solid fa-bars fa-xl"></i>
             </button>
-            <h2 className="text-2xl font-bold text-viniela-dark">
-              {pageTitle}
-            </h2>
+            <h2 className="text-2xl font-bold text-viniela-dark">{pageTitle}</h2>
           </div>
           <div className="flex items-center gap-4">
-            <span className="hidden md:block text-sm text-gray-500">
-              Welcome, Admin
-            </span>
+            <span className="hidden md:block text-sm text-gray-500">Welcome, Admin</span>
             <div className="w-10 h-10 bg-viniela-gold rounded-full flex items-center justify-center text-white font-bold shadow-md border-2 border-white ring-2 ring-gray-100">
               A
             </div>
@@ -153,22 +142,12 @@ const AdminPage: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            {activeView === "dashboard" && <DashboardView />}
-            {activeView === "news" && (
-              <NewsManagementView showToast={showToast} />
-            )}
-            {activeView === "careers" && (
-              <CareersManagementView showToast={showToast} />
-            )}
-            {activeView === "team" && (
-              <TeamManagementView showToast={showToast} />
-            )}
-            {activeView === "partners" && (
-              <PartnerManagementView showToast={showToast} />
-            )}
-            {activeView === "contact" && (
-              <ContactManagementView showToast={showToast} />
-            )}
+            {activeView === 'dashboard' && <DashboardView />}
+            {activeView === 'news' && <NewsManagementView showToast={showToast} />}
+            {activeView === 'careers' && <CareersManagementView showToast={showToast} />}
+            {activeView === 'team' && <TeamManagementView showToast={showToast} />}
+            {activeView === 'partners' && <PartnerManagementView showToast={showToast} />}
+            {activeView === 'contact' && <ContactManagementView showToast={showToast} />}
           </div>
         </main>
       </div>
