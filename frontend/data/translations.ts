@@ -1630,6 +1630,7 @@ const translations = {
       shareText: "Lihat artikel dari VINIELA Group ini: {title}\n{url}",
     },
     imageUploader: {
+      uploading: "Sedang mengunggah",
       uploadCTA: "Klik untuk mengunggah",
       dragAndDrop: "atau seret dan lepas",
       fileTypes: "PNG, JPG, GIF hingga 10MB",
@@ -3262,6 +3263,7 @@ const translations = {
       shareText: "Check out this article from VINIELA Group: {title}\n{url}",
     },
     imageUploader: {
+      uploading: "Uploading",
       uploadCTA: "Click to upload",
       dragAndDrop: "or drag and drop",
       fileTypes: "PNG, JPG, GIF up to 10MB",
@@ -4712,6 +4714,7 @@ const translations = {
       shareText: "查看这篇来自VINIELA集团的文章: {title}\n{url}",
     },
     imageUploader: {
+      uploading: "图片上传中",
       uploadCTA: "点击上传",
       dragAndDrop: "或拖放文件",
       fileTypes: "支持PNG, JPG, GIF, 最大10MB",

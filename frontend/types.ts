@@ -33,30 +33,20 @@ export interface Division {
 export interface JobListing {
   id: string;
   title: {
-    id: string;
-    en: string;
-    cn: string;
+    id: string; // hanya Bahasa Indonesia
   };
   location: {
-    id: string;
-    en: string;
-    cn: string;
+    id: string; // hanya Bahasa Indonesia
   };
   type: JobType;
   description: {
-    id: string;
-    en: string;
-    cn: string;
+    id: string; // hanya Bahasa Indonesia
   };
   responsibilities: {
-    id: string;
-    en: string;
-    cn: string;
+    id: string; // hanya Bahasa Indonesia
   };
   qualifications: {
-    id: string;
-    en: string;
-    cn: string;
+    id: string; // hanya Bahasa Indonesia
   };
   date: string;
 }
@@ -68,7 +58,7 @@ export interface JobApplication {
   name: string;
   email: string;
   phone: string;
-  resume: string; // Base64 data URL
+  resume: string; // Base64 data URL / URL file
   resumeFileName: string;
   coverLetter?: string;
   date: string;
