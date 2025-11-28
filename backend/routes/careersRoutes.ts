@@ -10,7 +10,61 @@ import {
   JobType,
 } from '../types';
 
+// ==== TAMBAHAN UNTUK UPLOAD RESUME ====
+import fs from 'fs';
+import multer from 'multer';
+import path from 'path';
+import { UPLOAD_ROOT } from '../config/upload';
+
 const router = Router();
+
+/* -------------------------------------------------------------------------- */
+/*                         CONFIG UPLOAD FILE RESUME                          */
+/* -------------------------------------------------------------------------- */
+
+const RESUME_UPLOAD_DIR = path.join(UPLOAD_ROOT, 'resumes');
+
+if (!fs.existsSync(RESUME_UPLOAD_DIR)) {
+  fs.mkdirSync(RESUME_UPLOAD_DIR, { recursive: true });
+}
+
+const resumeStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, RESUME_UPLOAD_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path
+      .basename(file.originalname, ext)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `${base || 'resume'}-${unique}${ext}`);
+  },
+});
+
+const resumeFileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  // boleh .pdf, .doc, .docx
+  if (
+    file.mimetype === 'application/pdf' ||
+    file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    file.mimetype === 'application/msword'
+  ) {
+    cb(null, true);
+  } else {
+    cb(new Error('File resume harus berupa PDF atau DOC/DOCX'));
+  }
+};
+
+const uploadResume = multer({
+  storage: resumeStorage,
+  fileFilter: resumeFileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB
+  },
+});
 
 /* -------------------------------------------------------------------------- */
 /*                          Helper mapping row -> DTO                         */
@@ -62,7 +116,7 @@ router.get('/jobs', async (_req: Request, res: Response) => {
         id,
         title_id,
         location_id,
-        job_type,             -- ⬅️ BENER: job_type
+        job_type,
         description_id,
         responsibilities_id,
         qualifications_id,
@@ -123,16 +177,6 @@ router.get('/jobs/:id', async (req: Request, res: Response) => {
 
 /**
  * POST /api/careers/jobs
- * Body:
- * {
- *   title: { id: string },
- *   location: { id: string },
- *   type: "Full-time" | "Part-time" | "Contract" | "Internship",
- *   description: { id: string },
- *   responsibilities: { id: string },
- *   qualifications: { id: string },
- *   date?: string
- * }
  */
 router.post('/jobs', async (req: Request, res: Response) => {
   try {
@@ -175,7 +219,7 @@ router.post('/jobs', async (req: Request, res: Response) => {
         id,
         title.id,
         location.id,
-        type, // <-- masuk ke kolom job_type
+        type,
         description.id,
         responsibilities.id,
         qualifications.id,
@@ -241,7 +285,7 @@ router.put('/jobs/:id', async (req: Request, res: Response) => {
       SET
         title_id = ?,
         location_id = ?,
-        job_type = ?,           -- ⬅️ di sini juga job_type
+        job_type = ?,
         description_id = ?,
         responsibilities_id = ?,
         qualifications_id = ?
@@ -313,10 +357,12 @@ router.delete('/jobs/:id', async (req: Request, res: Response) => {
 });
 
 /* -------------------------------------------------------------------------- */
-/*                        JOB APPLICATIONS ROUTES (ringkas)                   */
+/*                        JOB APPLICATIONS ROUTES                             */
 /* -------------------------------------------------------------------------- */
 
-// contoh singkat (kalau perlu full lagi bilang aja)
+/**
+ * GET /api/careers/applications
+ */
 router.get('/applications', async (_req, res) => {
   try {
     const rows = await query<JobApplicationRow>(
@@ -328,9 +374,13 @@ router.get('/applications', async (_req, res) => {
         a.name,
         a.email,
         a.phone,
+        a.resume_url,
         a.resume_filename,
         a.cover_letter,
-        a.applied_at
+        a.applied_at,
+        a.created_at,
+        a.updated_at,
+        a.applicant_name
       FROM job_applications a
       LEFT JOIN job_listings jl ON jl.id = a.job_id
       ORDER BY a.applied_at DESC
@@ -340,6 +390,92 @@ router.get('/applications', async (_req, res) => {
     res.json({ data: rows.map(mapApplicationRow) });
   } catch (err: any) {
     console.error('Error GET /api/careers/applications:', err);
+    res.status(500).json({ error: err.message || 'DB error' });
+  }
+});
+
+/**
+ * POST /api/careers/applications
+ * Body (multipart/form-data):
+ *  - fields: jobId, name, email, phone, coverLetter (optional)
+ *  - file:   resume (PDF/DOC/DOCX)
+ */
+router.post('/applications', uploadResume.single('resume'), async (req: Request, res: Response) => {
+  try {
+    const { jobId, name, email, phone, coverLetter } = req.body || {};
+    const file = req.file;
+
+    if (!jobId) {
+      return res.status(400).json({ error: 'jobId wajib diisi' });
+    }
+    if (!name) {
+      return res.status(400).json({ error: 'name wajib diisi' });
+    }
+    if (!email) {
+      return res.status(400).json({ error: 'email wajib diisi' });
+    }
+    if (!phone) {
+      return res.status(400).json({ error: 'phone wajib diisi' });
+    }
+    if (!file) {
+      return res.status(400).json({ error: 'File resume wajib di-upload' });
+    }
+
+    const id = generateId();
+    const appliedAt = new Date();
+
+    const resumeUrl = `/uploads/resumes/${file.filename}`;
+    const resumeFilename = file.originalname;
+
+    await query(
+      `
+        INSERT INTO job_applications (
+          id,
+          job_id,
+          name,
+          email,
+          phone,
+          resume_url,
+          resume_filename,
+          cover_letter,
+          applied_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      [id, jobId, name, email, phone, resumeUrl, resumeFilename, coverLetter || null, appliedAt],
+    );
+
+    // ambil lagi utk konsisten dengan mapper
+    const rows = await query<JobApplicationRow>(
+      `
+        SELECT
+          id,
+          job_id,
+          applicant_name,
+          name,
+          email,
+          phone,
+          resume_url,
+          resume_filename,
+          cover_letter,
+          applied_at,
+          created_at,
+          updated_at
+        FROM job_applications
+        WHERE id = ?
+        LIMIT 1
+        `,
+      [id],
+    );
+
+    const row = rows[0];
+    if (!row) {
+      return res.status(500).json({ error: 'Gagal membaca data aplikasi setelah insert' });
+    }
+
+    res.status(201).json({ data: mapApplicationRow(row) });
+  } catch (err: any) {
+    console.error('Error POST /api/careers/applications:', err);
     res.status(500).json({ error: err.message || 'DB error' });
   }
 });

@@ -54,14 +54,14 @@ export interface JobListing {
 export interface JobApplication {
   id: string;
   jobId: string;
-  jobTitle: string; // Store job title for easier display
-  name: string;
+  applicantName: string | null; // kolom lama, nullable
+  name: string | null; // kolom baru, nullable
   email: string;
   phone: string;
-  resume: string; // Base64 data URL / URL file
+  resume: string; // URL file resume dari backend (/uploads/resumes/xxx.pdf)
   resumeFileName: string;
-  coverLetter?: string;
-  date: string;
+  coverLetter: string | null; // nullable, bukan optional
+  date: string; // ISO string
 }
 
 export interface ContactMessage {
