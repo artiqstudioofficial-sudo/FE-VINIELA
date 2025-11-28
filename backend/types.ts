@@ -2,7 +2,7 @@
 /*                                   NEWS                                     */
 /* -------------------------------------------------------------------------- */
 
-export type NewsCategory = 'company' | 'division' | 'industry' | 'press';
+export type NewsCategory = "company" | "division" | "industry" | "press";
 
 export interface NewsRow {
   id: string;
@@ -40,7 +40,7 @@ export interface NewsArticleDto {
 /*                               CAREERS / JOBS                               */
 /* -------------------------------------------------------------------------- */
 
-export type JobType = 'Full-time' | 'Part-time' | 'Contract' | 'Internship';
+export type JobType = "Full-time" | "Part-time" | "Contract" | "Internship";
 
 /* ------------------------------- Job Listing ------------------------------- */
 
@@ -142,4 +142,27 @@ export interface PartnerDto {
   id: string;
   name: string;
   logoUrl: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               CONTACT MESSAGES                             */
+/* -------------------------------------------------------------------------- */
+
+export interface ContactMessageRow {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface ContactMessageDto {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  date: string; // ISO string dari created_at
 }

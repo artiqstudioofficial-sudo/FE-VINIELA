@@ -1,30 +1,62 @@
-import React, { useEffect, useState } from 'react';
-import { useTranslations } from '../contexts/i18n';
-import { saveContactMessage } from '../services/contactService';
+import React, { useEffect, useState } from "react";
+import { useTranslations } from "../contexts/i18n";
+import { saveContactMessage } from "../services/contactService";
 
 const ContactPage: React.FC = () => {
   const { t } = useTranslations();
-  const [formState, setFormState] = useState({ name: '', email: '', subject: '', message: '' });
+  const [formState, setFormState] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+  });
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setFormState((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    saveContactMessage({
-      name: formState.name,
-      email: formState.email,
-      subject: formState.subject,
-      message: formState.message,
-    });
-    setIsSubmitted(true);
+
+    // optional: simple guard
+    if (
+      !formState.name ||
+      !formState.email ||
+      !formState.subject ||
+      !formState.message
+    ) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await saveContactMessage({
+        name: formState.name,
+        email: formState.email,
+        subject: formState.subject,
+        message: formState.message,
+      });
+      setIsSubmitted(true);
+    } catch (err) {
+      console.error("Gagal mengirim pesan kontak:", err);
+      const msg =
+        err instanceof Error
+          ? err.message
+          : t.contact.errorMessage ||
+            "Gagal mengirim pesan. Silakan coba lagi.";
+      alert(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -33,13 +65,18 @@ const ContactPage: React.FC = () => {
       <section className="relative h-[50vh] flex items-center justify-center text-white bg-viniela-dark">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-30"
-          style={{ backgroundImage: "url('https://picsum.photos/seed/contact/1920/1080')" }}
+          style={{
+            backgroundImage:
+              "url('https://picsum.photos/seed/contact/1920/1080')",
+          }}
         ></div>
         <div className="relative z-10 text-center px-4">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
             {t.contact.heroTitle}
           </h1>
-          <p className="text-lg md:text-xl mt-4 max-w-3xl mx-auto">{t.contact.heroSubtitle}</p>
+          <p className="text-lg md:text-xl mt-4 max-w-3xl mx-auto">
+            {t.contact.heroSubtitle}
+          </p>
         </div>
       </section>
 
@@ -50,7 +87,9 @@ const ContactPage: React.FC = () => {
             {/* Contact Info & Map */}
             <div className="lg:col-span-5 space-y-8">
               <div>
-                <h3 className="text-2xl font-bold text-viniela-dark mb-4">{t.contact.infoTitle}</h3>
+                <h3 className="text-2xl font-bold text-viniela-dark mb-4">
+                  {t.contact.infoTitle}
+                </h3>
                 <div className="space-y-4 text-viniela-gray">
                   <div className="flex items-start">
                     <i
@@ -58,7 +97,9 @@ const ContactPage: React.FC = () => {
                       aria-hidden="true"
                     ></i>
                     <span className="whitespace-pre-line">
-                      <strong className="block text-viniela-dark">{t.contact.address}</strong>
+                      <strong className="block text-viniela-dark">
+                        {t.contact.address}
+                      </strong>
                       {t.footer.office.address}
                     </span>
                   </div>
@@ -68,7 +109,9 @@ const ContactPage: React.FC = () => {
                       aria-hidden="true"
                     ></i>
                     <span>
-                      <strong className="block text-viniela-dark">{t.contact.phone}</strong>
+                      <strong className="block text-viniela-dark">
+                        {t.contact.phone}
+                      </strong>
                       {t.contact.phoneValue}
                     </span>
                   </div>
@@ -78,7 +121,9 @@ const ContactPage: React.FC = () => {
                       aria-hidden="true"
                     ></i>
                     <span>
-                      <strong className="block text-viniela-dark">{t.contact.emailLabel}</strong>
+                      <strong className="block text-viniela-dark">
+                        {t.contact.emailLabel}
+                      </strong>
                       {t.contact.emailValue}
                     </span>
                   </div>
@@ -111,8 +156,12 @@ const ContactPage: React.FC = () => {
                     className="fa-solid fa-check-circle fa-4x text-green-500 mb-6"
                     aria-hidden="true"
                   ></i>
-                  <h2 className="text-3xl font-bold text-viniela-dark">{t.contact.successTitle}</h2>
-                  <p className="mt-2 text-lg text-viniela-gray">{t.contact.successMessage}</p>
+                  <h2 className="text-3xl font-bold text-viniela-dark">
+                    {t.contact.successTitle}
+                  </h2>
+                  <p className="mt-2 text-lg text-viniela-gray">
+                    {t.contact.successMessage}
+                  </p>
                 </div>
               ) : (
                 <>
@@ -177,8 +226,14 @@ const ContactPage: React.FC = () => {
                       ></textarea>
                     </div>
                     <div>
-                      <button type="submit" className="w-full btn-primary mt-2">
-                        {t.contact.sendMessage}
+                      <button
+                        type="submit"
+                        className="w-full btn-primary mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting
+                          ? t.contact.sending || "Mengirim pesan..."
+                          : t.contact.sendMessage}
                       </button>
                     </div>
                   </form>

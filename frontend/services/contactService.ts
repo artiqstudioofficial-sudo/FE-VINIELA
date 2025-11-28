@@ -1,42 +1,87 @@
-import { ContactMessage } from '../types';
+// src/services/contactService.ts
+import { ContactMessage } from "../types";
 
-const CONTACT_MESSAGES_STORAGE_KEY = 'vinielaContactMessages';
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
+const CONTACT_API = `${API_BASE}/api/contact-messages`;
 
-export const getContactMessages = (): ContactMessage[] => {
+/* -------------------------------------------------------------------------- */
+/*                              Helper fetch JSON                             */
+/* -------------------------------------------------------------------------- */
+
+async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+    ...options,
+  });
+
+  if (!res.ok) {
+    let message = `Request failed with status ${res.status}`;
     try {
-        const messagesJson = localStorage.getItem(CONTACT_MESSAGES_STORAGE_KEY);
-        const messages = messagesJson ? JSON.parse(messagesJson) : [];
-        // Sort by date descending (newest first)
-        return messages.sort((a: ContactMessage, b: ContactMessage) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    } catch (error) {
-        console.error('Failed to parse contact messages from localStorage', error);
-        return [];
+      const body = await res.json();
+      if (body && (body as any).error) {
+        message = (body as any).error;
+      }
+    } catch {
+      // ignore parse error
     }
+    throw new Error(message);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Contact Messages                              */
+/* -------------------------------------------------------------------------- */
+
+interface ContactMessagesResponse {
+  data: ContactMessage[];
+}
+
+/**
+ * Ambil semua pesan contact
+ * GET /api/contact-messages
+ */
+export const getContactMessages = async (): Promise<ContactMessage[]> => {
+  const resp = await fetchJson<ContactMessagesResponse>(CONTACT_API);
+  return resp.data;
 };
 
-export const saveContactMessages = (messages: ContactMessage[]) => {
-    try {
-        localStorage.setItem(CONTACT_MESSAGES_STORAGE_KEY, JSON.stringify(messages));
-    } catch (error) {
-        console.error('Failed to save contact messages to localStorage', error);
-    }
+/**
+ * Simpan satu pesan contact (dipakai form "Contact Us")
+ * POST /api/contact-messages
+ *
+ * Body:
+ *  {
+ *    name: string;
+ *    email: string;
+ *    subject: string;
+ *    message: string;
+ *  }
+ *
+ * Backend akan generate id & date (created_at)
+ */
+export const saveContactMessage = async (
+  messageData: Omit<ContactMessage, "id" | "date">
+): Promise<ContactMessage> => {
+  const resp = await fetchJson<{ data: ContactMessage }>(CONTACT_API, {
+    method: "POST",
+    body: JSON.stringify(messageData),
+  });
+
+  return resp.data;
 };
 
-export const saveContactMessage = (messageData: Omit<ContactMessage, 'id' | 'date'>): ContactMessage => {
-    const messages = getContactMessages();
-    const newMessage: ContactMessage = {
-        ...messageData,
-        id: new Date().getTime().toString(),
-        date: new Date().toISOString(),
-    };
-    // Add the new message to the beginning of the array
-    const updatedMessages = [newMessage, ...messages];
-    saveContactMessages(updatedMessages);
-    return newMessage;
-};
-
-export const deleteContactMessage = (messageId: string) => {
-    const messages = getContactMessages();
-    const updatedMessages = messages.filter(msg => msg.id !== messageId);
-    saveContactMessages(updatedMessages);
+/**
+ * Hapus satu pesan contact
+ * DELETE /api/contact-messages/:id
+ */
+export const deleteContactMessage = async (
+  messageId: string
+): Promise<void> => {
+  await fetchJson<{ ok: boolean }>(`${CONTACT_API}/${messageId}`, {
+    method: "DELETE",
+  });
 };

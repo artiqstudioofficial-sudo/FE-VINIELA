@@ -24,17 +24,52 @@ const ContactManagementView: React.FC<ContactManagementViewProps> = ({
   const [expandedMessageId, setExpandedMessageId] = useState<string | null>(
     null
   );
+  const [isLoadingList, setIsLoadingList] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
+  /* --------------------------- Load dari API --------------------------- */
   useEffect(() => {
-    setContactMessages(contactService.getContactMessages());
-  }, []);
+    const loadMessages = async () => {
+      try {
+        setIsLoadingList(true);
+        const data = await contactService.getContactMessages();
+        setContactMessages(data);
+      } catch (err) {
+        console.error("Gagal memuat pesan kontak:", err);
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "Gagal memuat pesan kontak dari server";
+        showToast(msg, "error");
+      } finally {
+        setIsLoadingList(false);
+      }
+    };
 
-  const confirmDeleteMessage = () => {
-    if (messageToDelete) {
-      contactService.deleteContactMessage(messageToDelete);
-      setContactMessages(contactService.getContactMessages());
-      setMessageToDelete(null);
+    loadMessages();
+  }, [showToast]);
+
+  /* ------------------------------ Delete msg ------------------------------ */
+  const confirmDeleteMessage = async () => {
+    if (!messageToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await contactService.deleteContactMessage(messageToDelete);
+      setContactMessages((prev) =>
+        prev.filter((msg) => msg.id !== messageToDelete)
+      );
       showToast(t.admin.toast.messageDeleted ?? "Message deleted");
+    } catch (err) {
+      console.error("Gagal menghapus pesan kontak:", err);
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Gagal menghapus pesan kontak di server";
+      showToast(msg, "error");
+    } finally {
+      setIsDeleting(false);
+      setMessageToDelete(null);
     }
   };
 
@@ -46,11 +81,19 @@ const ContactManagementView: React.FC<ContactManagementViewProps> = ({
         onConfirm={confirmDeleteMessage}
         title={t.admin.deleteModalTitle}
         message={t.admin.confirmDeleteMessage}
+        // optional: bisa tambahin indikator loading di modal kalau perlu
       />
 
       <div className="bg-white p-8 rounded-xl shadow-lg animate-fade-in-up">
         <div className="overflow-x-auto">
-          {contactMessages.length > 0 ? (
+          {isLoadingList ? (
+            <div className="text-center py-12">
+              <i className="fa-regular fa-envelope fa-3x text-gray-300 mb-4" />
+              <p className="text-gray-500">
+                {t.admin.loading || "Memuat pesan kontak..."}
+              </p>
+            </div>
+          ) : contactMessages.length > 0 ? (
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -99,7 +142,8 @@ const ContactManagementView: React.FC<ContactManagementViewProps> = ({
                             e.stopPropagation();
                             setMessageToDelete(msg.id);
                           }}
-                          className="text-red-600 hover:text-red-900 transition-colors p-2 hover:bg-red-50 rounded-full"
+                          className="text-red-600 hover:text-red-900 transition-colors p-2 hover:bg-red-50 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isDeleting}
                         >
                           <i className="fa-solid fa-trash"></i>
                         </button>
