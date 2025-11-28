@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslations } from '../contexts/i18n';
 import * as careersService from '../services/careersService';
-import { JobApplication, JobListing } from '../types';
+import { JobListing } from '../types';
 
 const CareersDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,7 +15,7 @@ const CareersDetailPage: React.FC = () => {
     phone: '',
     coverLetter: '',
   });
-  const [resume, setResume] = useState<{ file: File; base64: string } | null>(null);
+  const [resume, setResume] = useState<File | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoadingJob, setIsLoadingJob] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,7 +33,6 @@ const CareersDetailPage: React.FC = () => {
         setJob(foundJob || null);
       } catch (err) {
         console.error('Gagal memuat detail job:', err);
-        // Bisa diganti toast kalau ada
         alert(err instanceof Error ? err.message : 'Gagal memuat detail lowongan dari server');
       } finally {
         setIsLoadingJob(false);
@@ -51,32 +50,26 @@ const CareersDetailPage: React.FC = () => {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setResume({ file, base64: event.target?.result as string });
-      };
-      reader.readAsDataURL(file);
-    }
+    const file = e.target.files?.[0] || null;
+    setResume(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!job || !resume) return;
 
-    // Sesuai type lama: tetap pakai base64, tapi judul sekarang dari title.id
-    const application: Omit<JobApplication, 'id' | 'date'> = {
+    // Payload text → akan dibungkus FormData di careersService.addApplication
+    const payload = {
       jobId: job.id,
-      jobTitle: job.title.id, // sekarang pakai 1 bahasa (id) sebagai sumber
-      ...formState,
-      resume: resume.base64,
-      resumeFileName: resume.file.name,
+      name: formState.name,
+      email: formState.email,
+      phone: formState.phone,
+      coverLetter: formState.coverLetter || '',
     };
 
     try {
       setIsSubmitting(true);
-      await careersService.addApplication(application);
+      await careersService.addApplication(payload, resume);
       setIsSubmitted(true);
     } catch (err) {
       console.error('Gagal mengirim lamaran:', err);

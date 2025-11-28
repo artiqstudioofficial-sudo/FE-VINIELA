@@ -1,8 +1,8 @@
-import { JobListing, JobApplication } from "../types";
+import { JobApplication, JobListing } from '../types';
 
-const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
+const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:4000';
 
-// endpoint jobs (SUDAH DIBEDAKAN JELAS KE /jobs)
+// endpoint jobs
 const JOBS_API = `${API_BASE}/api/careers/jobs`;
 // endpoint applications
 const APPLICATIONS_API = `${API_BASE}/api/careers/applications`;
@@ -14,7 +14,7 @@ const APPLICATIONS_API = `${API_BASE}/api/careers/applications`;
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     ...options,
   });
@@ -45,7 +45,7 @@ interface JobsResponse {
 
 /**
  * Ambil daftar job listings.
- * Sekarang via API: GET /api/careers/jobs
+ * GET /api/careers/jobs
  */
 export const getJobListings = async (): Promise<JobListing[]> => {
   const resp = await fetchJson<JobsResponse>(JOBS_API);
@@ -56,14 +56,12 @@ export const getJobListings = async (): Promise<JobListing[]> => {
  * Ambil satu job berdasarkan ID
  * GET /api/careers/jobs/:id
  */
-export const getJobListingById = async (
-  id: string
-): Promise<JobListing | undefined> => {
+export const getJobListingById = async (id: string): Promise<JobListing | undefined> => {
   try {
     const resp = await fetchJson<{ data: JobListing }>(`${JOBS_API}/${id}`);
     return resp.data;
   } catch (err) {
-    console.error("Failed to fetch job by id", err);
+    console.error('Failed to fetch job by id', err);
     return undefined;
   }
 };
@@ -73,7 +71,7 @@ export const getJobListingById = async (
  * Di sini tetap pakai addJobListing satu per satu
  */
 export const saveJobListings = async (
-  jobs: Omit<JobListing, "id" | "date">[]
+  jobs: Omit<JobListing, 'id' | 'date'>[],
 ): Promise<JobListing[]> => {
   const createdJobs: JobListing[] = [];
   for (const job of jobs) {
@@ -87,9 +85,7 @@ export const saveJobListings = async (
  * Tambah job baru
  * POST /api/careers/jobs
  */
-export const addJobListing = async (
-  job: Omit<JobListing, "id" | "date">
-): Promise<JobListing> => {
+export const addJobListing = async (job: Omit<JobListing, 'id' | 'date'>): Promise<JobListing> => {
   const payload = {
     title: job.title, // { id: string }
     location: job.location, // { id: string }
@@ -100,7 +96,7 @@ export const addJobListing = async (
   };
 
   const resp = await fetchJson<{ data: JobListing }>(JOBS_API, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(payload),
   });
 
@@ -111,9 +107,7 @@ export const addJobListing = async (
  * Update job listing
  * PUT /api/careers/jobs/:id
  */
-export const updateJobListing = async (
-  updatedJob: JobListing
-): Promise<JobListing> => {
+export const updateJobListing = async (updatedJob: JobListing): Promise<JobListing> => {
   const payload = {
     title: updatedJob.title,
     location: updatedJob.location,
@@ -124,13 +118,10 @@ export const updateJobListing = async (
     date: updatedJob.date,
   };
 
-  const resp = await fetchJson<{ data: JobListing }>(
-    `${JOBS_API}/${updatedJob.id}`,
-    {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    }
-  );
+  const resp = await fetchJson<{ data: JobListing }>(`${JOBS_API}/${updatedJob.id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
 
   return resp.data;
 };
@@ -141,7 +132,7 @@ export const updateJobListing = async (
  */
 export const deleteJobListing = async (jobId: string): Promise<void> => {
   await fetchJson<{ ok: boolean }>(`${JOBS_API}/${jobId}`, {
-    method: "DELETE",
+    method: 'DELETE',
   });
 };
 
@@ -151,6 +142,15 @@ export const deleteJobListing = async (jobId: string): Promise<void> => {
 
 interface ApplicationsResponse {
   data: JobApplication[];
+}
+
+/** Payload create application (tanpa field auto-generated & tanpa file) */
+export interface ApplicationCreatePayload {
+  jobId: string;
+  name: string;
+  email: string;
+  phone: string;
+  coverLetter?: string;
 }
 
 /**
@@ -163,14 +163,14 @@ export const getApplications = async (): Promise<JobApplication[]> => {
 };
 
 /**
- * Simpan semua applications (opsional, helper bulk)
+ * Simpan banyak lamaran sekaligus (helper; kalau butuh bulk import)
  */
 export const saveApplications = async (
-  applications: Omit<JobApplication, "id" | "date">[]
+  applications: { payload: ApplicationCreatePayload; resumeFile: File }[],
 ): Promise<JobApplication[]> => {
   const created: JobApplication[] = [];
   for (const app of applications) {
-    const newApp = await addApplication(app);
+    const newApp = await addApplication(app.payload, app.resumeFile);
     created.push(newApp);
   }
   return created;
@@ -179,26 +179,57 @@ export const saveApplications = async (
 /**
  * Tambah satu lamaran kerja
  * POST /api/careers/applications
+ *
+ * Body: multipart/form-data
+ *  - jobId
+ *  - name
+ *  - email
+ *  - phone
+ *  - coverLetter (opsional)
+ *  - resume (file)
  */
 export const addApplication = async (
-  application: Omit<JobApplication, "id" | "date">
+  payload: ApplicationCreatePayload,
+  resumeFile: File,
 ): Promise<JobApplication> => {
-  const resp = await fetchJson<{ data: JobApplication }>(APPLICATIONS_API, {
-    method: "POST",
-    body: JSON.stringify(application),
+  const formData = new FormData();
+  formData.append('jobId', payload.jobId);
+  formData.append('name', payload.name);
+  formData.append('email', payload.email);
+  formData.append('phone', payload.phone);
+  if (payload.coverLetter) {
+    formData.append('coverLetter', payload.coverLetter);
+  }
+  formData.append('resume', resumeFile);
+
+  const res = await fetch(APPLICATIONS_API, {
+    method: 'POST',
+    body: formData, // jangan set Content-Type manual, biar browser yang set boundary
   });
 
-  return resp.data;
+  if (!res.ok) {
+    let message = `Request failed with status ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body && (body as any).error) {
+        message = (body as any).error;
+      }
+    } catch {
+      // ignore parse error
+    }
+    throw new Error(message);
+  }
+
+  const data = (await res.json()) as { data: JobApplication };
+  return data.data;
 };
 
 /**
  * Hapus lamaran kerja
  * DELETE /api/careers/applications/:id
  */
-export const deleteApplication = async (
-  applicationId: string
-): Promise<void> => {
+export const deleteApplication = async (applicationId: string): Promise<void> => {
   await fetchJson<{ ok: boolean }>(`${APPLICATIONS_API}/${applicationId}`, {
-    method: "DELETE",
+    method: 'DELETE',
   });
 };

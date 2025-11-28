@@ -432,6 +432,7 @@ router.post('/applications', uploadResume.single('resume'), async (req: Request,
         INSERT INTO job_applications (
           id,
           job_id,
+          applicant_name,
           name,
           email,
           phone,
@@ -440,9 +441,20 @@ router.post('/applications', uploadResume.single('resume'), async (req: Request,
           cover_letter,
           applied_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
-      [id, jobId, name, email, phone, resumeUrl, resumeFilename, coverLetter || null, appliedAt],
+      [
+        id,
+        jobId,
+        name, // applicant_name → isi sama dengan name (legacy support)
+        name, // name (kolom baru)
+        email,
+        phone,
+        resumeUrl,
+        resumeFilename,
+        coverLetter || null,
+        appliedAt,
+      ],
     );
 
     // ambil lagi utk konsisten dengan mapper
